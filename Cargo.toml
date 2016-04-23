@@ -1,0 +1,7 @@
+[package]
+name = "dogstatsd"
+version = "0.1.0"
+authors = ["Matt Casper <matthewvcasper@gmail.com>"]
+
+[dependencies]
+chrono = "0.2"
