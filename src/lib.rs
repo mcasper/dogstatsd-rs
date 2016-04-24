@@ -16,7 +16,7 @@ pub struct DogstatsdOptions {
 }
 
 impl DogstatsdOptions {
-    fn default() -> Self {
+    pub fn default() -> Self {
         DogstatsdOptions{
             host: "127.0.0.1".into(),
             port: 8125,
@@ -50,9 +50,6 @@ impl Dogstatsd {
     }
 
     /// Time a block of code
-    // time({
-    //    my_func_to_time
-    // })
     pub fn time<F: FnOnce()>(&self, stat: &str, block: F) -> Result<(), DogstatsdError> {
         let start_time = UTC::now();
         block();

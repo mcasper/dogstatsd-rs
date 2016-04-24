@@ -2,6 +2,11 @@
 name = "dogstatsd"
 version = "0.1.0"
 authors = ["Matt Casper <matthewvcasper@gmail.com>"]
+license = "MIT"
+description = "A Dogstatsd client for Rust."
+documentation = "https://github.com/mcasper/dogstatsd-rs"
+repository = "https://github.com/mcasper/dogstatsd-rs"
+keywords = []
 
 [dependencies]
 chrono = "0.2"
