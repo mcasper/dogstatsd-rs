@@ -11,31 +11,31 @@ use self::metrics::*;
 
 #[derive(Debug, PartialEq)]
 pub struct DogstatsdOptions {
-    pub host: String,
-    pub port: i32,
+    pub from_addr: String,
+    pub to_addr: String,
 }
 
 impl DogstatsdOptions {
     pub fn default() -> Self {
-        DogstatsdOptions{
-            host: "127.0.0.1".into(),
-            port: 8125,
+        DogstatsdOptions {
+            from_addr: "127.0.0.1:8126".into(),
+            to_addr: "127.0.0.1:8125".into(),
         }
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Dogstatsd {
-    udp_socket: String,
+    from_addr: String,
+    to_addr: String,
 }
 
 impl Dogstatsd {
     /// Spawn a new Dogstatsd handle
     pub fn new(options: DogstatsdOptions) -> Self {
-        let socket_addr = format!("{}:{}", options.host, options.port);
-
         Dogstatsd {
-            udp_socket: socket_addr,
+            from_addr: options.from_addr,
+            to_addr: options.to_addr,
         }
     }
 
@@ -85,12 +85,12 @@ impl Dogstatsd {
 
     fn send<M: Metric>(&self, metric: M) -> Result<(), DogstatsdError> {
         let socket = try!(self.socket());
-        try!(socket.send_to(metric.format_for_send().as_bytes(), try!(socket.local_addr())));
+        try!(socket.send_to(metric.format_for_send().as_bytes(), &self.to_addr[..]));
         Ok(())
     }
 
     fn socket(&self) -> Result<UdpSocket, DogstatsdError> {
-        let socket = try!(UdpSocket::bind(&self.udp_socket[..]));
+        let socket = try!(UdpSocket::bind(&self.from_addr[..]));
         Ok(socket)
     }
 }
@@ -104,8 +104,8 @@ mod tests {
     fn test_options_default() {
         let options = DogstatsdOptions::default();
         let expected_options = DogstatsdOptions {
-            host: "127.0.0.1".into(),
-            port: 8125,
+            from_addr: "127.0.0.1:8126".into(),
+            to_addr: "127.0.0.1:8125".into(),
         };
 
         assert_eq!(expected_options, options)
@@ -114,7 +114,11 @@ mod tests {
     #[test]
     fn test_new() {
         let client = Dogstatsd::new(DogstatsdOptions::default());
+        let expected_client = Dogstatsd {
+            from_addr: "127.0.0.1:8126".into(),
+            to_addr: "127.0.0.1:8125".into(),
+        };
 
-        assert_eq!(Dogstatsd { udp_socket: "127.0.0.1:8125".into() }, client)
+        assert_eq!(expected_client, client)
     }
 }
