@@ -11,8 +11,8 @@ use self::metrics::*;
 
 #[derive(Debug, PartialEq)]
 pub struct DogstatsdOptions {
-    host: String,
-    port: i32,
+    pub host: String,
+    pub port: i32,
 }
 
 impl DogstatsdOptions {
