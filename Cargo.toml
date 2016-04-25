@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Matt Casper <matthewvcasper@gmail.com>"]
 license = "MIT"
 description = "A Dogstatsd client for Rust."
-documentation = "https://github.com/mcasper/dogstatsd-rs"
+documentation = "https://mcasper.github.io/dogstatsd-rs/dogstatsd/"
 repository = "https://github.com/mcasper/dogstatsd-rs"
 keywords = []
 
