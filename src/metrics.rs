@@ -39,11 +39,11 @@ impl Metric for TimeMetric {
 }
 
 impl TimeMetric {
-    pub fn new(stat: &str, start_time: DateTime<UTC>, end_time: DateTime<UTC>) -> Self {
+    pub fn new(stat: String, start_time: DateTime<UTC>, end_time: DateTime<UTC>) -> Self {
         TimeMetric {
             start_time: start_time,
             end_time: end_time,
-            stat: stat.into(),
+            stat: stat,
         }
     }
 }
@@ -61,10 +61,10 @@ impl Metric for TimingMetric {
 }
 
 impl TimingMetric {
-    pub fn new(stat: &str, ms: i64) -> Self {
+    pub fn new(stat: String, ms: i64) -> Self {
         TimingMetric {
             ms: ms,
-            stat: stat.into(),
+            stat: stat,
         }
     }
 }
@@ -82,10 +82,10 @@ impl Metric for GaugeMetric {
 }
 
 impl GaugeMetric {
-    pub fn new(stat: &str, val: &str) -> Self {
+    pub fn new(stat: String, val: String) -> Self {
         GaugeMetric {
-            stat: stat.into(),
-            val: val.into(),
+            stat: stat,
+            val: val,
         }
     }
 }
@@ -103,10 +103,10 @@ impl Metric for HistogramMetric {
 }
 
 impl HistogramMetric {
-    pub fn new(stat: &str, val: &str) -> Self {
+    pub fn new(stat: String, val: String) -> Self {
         HistogramMetric {
-            stat: stat.into(),
-            val: val.into(),
+            stat: stat,
+            val: val,
         }
     }
 }
@@ -124,10 +124,10 @@ impl Metric for SetMetric {
 }
 
 impl SetMetric {
-    pub fn new(stat: &str, val: &str) -> Self {
+    pub fn new(stat: String, val: String) -> Self {
         SetMetric {
-            stat: stat.into(),
-            val: val.into(),
+            stat: stat,
+            val: val,
         }
     }
 }
@@ -148,10 +148,10 @@ impl Metric for Event {
 }
 
 impl Event {
-    pub fn new(title: &str, text: &str) -> Self {
+    pub fn new(title: String, text: String) -> Self {
         Event {
-            title: title.into(),
-            text: text.into(),
+            title: title,
+            text: text,
         }
     }
 }
@@ -179,42 +179,42 @@ mod tests {
     fn test_time_metric() {
         let start_time = UTC.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 0);
         let end_time = UTC.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 900);
-        let metric = TimeMetric::new("time", start_time, end_time);
+        let metric = TimeMetric::new("time".into(), start_time, end_time);
 
         assert_eq!("time:900|ms", metric.format_for_send())
     }
 
     #[test]
     fn test_timing_metric() {
-        let metric = TimingMetric::new("timing", 720);
+        let metric = TimingMetric::new("timing".into(), 720);
 
         assert_eq!("timing:720|ms", metric.format_for_send())
     }
 
     #[test]
     fn test_gauge_metric() {
-        let metric = GaugeMetric::new("gauge", "12345");
+        let metric = GaugeMetric::new("gauge".into(), "12345".into());
 
         assert_eq!("gauge:12345|g", metric.format_for_send())
     }
 
     #[test]
     fn test_histogram_metric() {
-        let metric = HistogramMetric::new("histogram", "67890");
+        let metric = HistogramMetric::new("histogram".into(), "67890".into());
 
         assert_eq!("histogram:67890|h", metric.format_for_send())
     }
 
     #[test]
     fn test_set_metric() {
-        let metric = SetMetric::new("set", "13579");
+        let metric = SetMetric::new("set".into(), "13579".into());
 
         assert_eq!("set:13579|s", metric.format_for_send())
     }
 
     #[test]
     fn test_event() {
-        let metric = Event::new("Event Title", "Event Body - Something Happened");
+        let metric = Event::new("Event Title".into(), "Event Body - Something Happened".into());
 
         assert_eq!("_e{11,31}:Event Title|Event Body - Something Happened",
                    metric.format_for_send())

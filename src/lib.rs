@@ -85,7 +85,7 @@ impl Client {
     ///   let client = Client::new(Options::default());
     ///   client.incr("counter").unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn incr(&self, stat: &str) -> DogstatsdResult {
+    pub fn incr<S: Into<String>>(&self, stat: S) -> DogstatsdResult {
         self.send(CountMetric::Incr(stat.into()))
     }
 
@@ -100,7 +100,7 @@ impl Client {
     ///   let client = Client::new(Options::default());
     ///   client.decr("counter").unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn decr(&self, stat: &str) -> DogstatsdResult {
+    pub fn decr<S: Into<String>>(&self, stat: S) -> DogstatsdResult {
         self.send(CountMetric::Decr(stat.into()))
     }
 
@@ -119,12 +119,12 @@ impl Client {
     ///       thread::sleep(Duration::from_millis(200))
     ///   }).unwrap_or_else(|e| println!("Encountered error: {}", e))
     /// ```
-    pub fn time<F: FnOnce()>(&self, stat: &str, block: F) -> DogstatsdResult {
+    pub fn time<S: Into<String>, F: FnOnce()>(&self, stat: S, block: F) -> DogstatsdResult {
         let start_time = UTC::now();
         block();
         let end_time = UTC::now();
 
-        self.send(TimeMetric::new(stat, start_time, end_time))
+        self.send(TimeMetric::new(stat.into(), start_time, end_time))
     }
 
     /// Send your own timing metric in milliseconds
@@ -138,8 +138,8 @@ impl Client {
     ///   let client = Client::new(Options::default());
     ///   client.timing("timing", 350).unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn timing(&self, stat: &str, ms: i64) -> DogstatsdResult {
-        self.send(TimingMetric::new(stat, ms))
+    pub fn timing<S: Into<String>>(&self, stat: S, ms: i64) -> DogstatsdResult {
+        self.send(TimingMetric::new(stat.into(), ms))
     }
 
     /// Report an arbitrary value as a gauge
@@ -152,8 +152,8 @@ impl Client {
     ///   let client = Client::new(Options::default());
     ///   client.gauge("gauge", "12345").unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn gauge(&self, stat: &str, val: &str) -> DogstatsdResult {
-        self.send(GaugeMetric::new(stat, val))
+    pub fn gauge<S: Into<String>>(&self, stat: S, val: S) -> DogstatsdResult {
+        self.send(GaugeMetric::new(stat.into(), val.into()))
     }
 
     /// Report a value in a histogram
@@ -166,8 +166,8 @@ impl Client {
     ///   let client = Client::new(Options::default());
     ///   client.histogram("histogram", "67890").unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn histogram(&self, stat: &str, val: &str) -> DogstatsdResult {
-        self.send(HistogramMetric::new(stat, val))
+    pub fn histogram<S: Into<String>>(&self, stat: S, val: S) -> DogstatsdResult {
+        self.send(HistogramMetric::new(stat.into(), val.into()))
     }
 
     /// Report a value in a set
@@ -180,8 +180,8 @@ impl Client {
     ///   let client = Client::new(Options::default());
     ///   client.set("set", "13579").unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn set(&self, stat: &str, val: &str) -> DogstatsdResult {
-        self.send(SetMetric::new(stat, val))
+    pub fn set<S: Into<String>>(&self, stat: S, val: S) -> DogstatsdResult {
+        self.send(SetMetric::new(stat.into(), val.into()))
     }
 
     /// Send a custom event as a title and a body
@@ -194,8 +194,8 @@ impl Client {
     ///   let client = Client::new(Options::default());
     ///   client.event("Event Title", "Event Body").unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn event(&self, title: &str, text: &str) -> DogstatsdResult {
-        self.send(Event::new(title, text))
+    pub fn event<S: Into<String>>(&self, title: S, text: S) -> DogstatsdResult {
+        self.send(Event::new(title.into(), text.into()))
     }
 
     fn send<M: Metric>(&self, metric: M) -> DogstatsdResult {
