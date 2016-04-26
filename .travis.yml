@@ -1,3 +1,4 @@
+sudo: false
 language: rust
 rust:
   - stable
@@ -15,10 +16,7 @@ matrix:
   allow_failures:
     - rust: nightly
 after_success:
-  - "(cd dogstatsd-rs && travis-cargo --only stable doc-upload)"
-branches:
-  only:
-    - master
+  - travis-cargo --only stable doc-upload
 env:
   global:
     - TRAVIS_CARGO_NIGHTLY_FEATURE=""
