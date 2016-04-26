@@ -10,5 +10,3 @@ you want, tag it, and enjoy your custom metrics.
 
 ## Todo
 - [ ] Fill out the README
-- [ ] Get documentation site running
-- [ ] Support tags and sampling %s
