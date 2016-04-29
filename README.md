@@ -1,5 +1,8 @@
 dogstatsd-rs
 ============
+[![Build Status](https://travis-ci.org/mcasper/dogstatsd-rs.svg?branch=master)](https://travis-ci.org/mcasper/dogstatsd-rs)
+[![Crate Version](https://img.shields.io/crates/v/dogstatsd.svg)](https://crates.io/crates/dogstatsd)
+
 A Rust client for interacting with Dogstatsd
 
 Dogstatsd is a custom StatsD implementation by DataDog for sending metrics and
