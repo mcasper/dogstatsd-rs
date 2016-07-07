@@ -9,7 +9,7 @@ pub fn format_for_send(metric: String, namespace: &String, tags: Vec<String>) ->
 
     let joined_tags = tags.join(",");
     if joined_tags != "" {
-        result = format!("{}|{}", result, joined_tags)
+        result = format!("{}|#{}", result, joined_tags)
     }
 
     result
@@ -187,7 +187,7 @@ mod tests {
     #[test]
     fn test_format_for_send_no_namespace() {
         assert_eq!(
-            "metric:val|v|tag:1,tag:2".to_string(),
+            "metric:val|v|#tag:1,tag:2".to_string(),
             format_for_send("metric:val|v".to_string(), &String::new(), vec!["tag:1".into(), "tag:2".into()])
         )
     }
@@ -195,7 +195,7 @@ mod tests {
     #[test]
     fn test_format_for_send_everything() {
         assert_eq!(
-            "namespace.metric:val|v|tag:1,tag:2".to_string(),
+            "namespace.metric:val|v|#tag:1,tag:2".to_string(),
             format_for_send("metric:val|v".to_string(), &"namespace".to_string(), vec!["tag:1".into(), "tag:2".into()])
         )
     }
