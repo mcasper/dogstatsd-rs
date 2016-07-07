@@ -1,12 +1,12 @@
 [package]
 name = "dogstatsd"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Matt Casper <matthewvcasper@gmail.com>"]
 license = "MIT"
-description = "A Dogstatsd client for Rust."
+description = "A DogstatsD client for Rust."
 documentation = "https://mcasper.github.io/dogstatsd-rs/dogstatsd/"
 repository = "https://github.com/mcasper/dogstatsd-rs"
-keywords = []
+keywords = ["datadog", "dogstatsd", "client"]
 
 [dependencies]
 chrono = "0.2"
