@@ -1,6 +1,6 @@
 //! A Rust client for interacting with Dogstatsd
 //!
-//! Dogstatsd is a custom StatsD implementation by DataDog for sending metrics and events to their
+//! Dogstatsd is a custom `StatsD` implementation by `DataDog` for sending metrics and events to their
 //! system. Through this client you can report any type of metric you want, tag it, and enjoy your
 //! custom metrics.
 //!
@@ -289,7 +289,7 @@ impl Client {
 
     fn send<M: Metric>(&self, metric: M, tags: Vec<String>) -> DogstatsdResult {
         let socket = try!(self.socket());
-        let formatted_metric = format_for_send(metric.metric_type_format(), &self.namespace, tags);
+        let formatted_metric = format_for_send(metric.metric_type_format(), &self.namespace[..], tags.as_slice());
         try!(socket.send_to(formatted_metric.as_bytes(), &self.to_addr[..]));
         Ok(())
     }
