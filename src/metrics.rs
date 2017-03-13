@@ -1,6 +1,6 @@
 use chrono::{DateTime, UTC};
 
-pub fn format_for_send(metric: String, namespace: &String, tags: Vec<String>) -> String {
+pub fn format_for_send(metric: String, namespace: &str, tags: &[String]) -> String {
     let mut result = metric;
 
     if namespace != "" {
@@ -180,7 +180,7 @@ mod tests {
     fn test_format_for_send_no_tags() {
         assert_eq!(
             "namespace.metric:val|v".to_string(),
-            format_for_send("metric:val|v".to_string(), &"namespace".to_string(), vec![])
+            format_for_send("metric:val|v".to_string(), "namespace", &[])
         )
     }
 
@@ -188,7 +188,7 @@ mod tests {
     fn test_format_for_send_no_namespace() {
         assert_eq!(
             "metric:val|v|#tag:1,tag:2".to_string(),
-            format_for_send("metric:val|v".to_string(), &String::new(), vec!["tag:1".into(), "tag:2".into()])
+            format_for_send("metric:val|v".to_string(), "", &["tag:1".into(), "tag:2".into()])
         )
     }
 
@@ -196,7 +196,7 @@ mod tests {
     fn test_format_for_send_everything() {
         assert_eq!(
             "namespace.metric:val|v|#tag:1,tag:2".to_string(),
-            format_for_send("metric:val|v".to_string(), &"namespace".to_string(), vec!["tag:1".into(), "tag:2".into()])
+            format_for_send("metric:val|v".to_string(), "namespace", &["tag:1".into(), "tag:2".into()])
         )
     }
 

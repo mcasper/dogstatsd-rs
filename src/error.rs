@@ -17,7 +17,7 @@ impl fmt::Display for DogstatsdError {
 impl Error for DogstatsdError {
     fn description(&self) -> &str {
         match *self {
-            IoError(ref error) => error.cause().map(|e| e.description()).unwrap_or(error.description()),
+            IoError(ref error) => error.description(),
         }
     }
 }
