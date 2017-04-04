@@ -10,3 +10,6 @@ keywords = ["datadog", "dogstatsd", "client"]
 
 [dependencies]
 chrono = "0.2"
+
+[features]
+unstable = []
