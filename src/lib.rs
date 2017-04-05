@@ -11,8 +11,9 @@
 //! ```
 //! use dogstatsd::{Client, Options};
 //!
-//! // Binds to a udp socket on 127.0.0.1:8126 for transmitting, and sends to
-//! // 127.0.0.1:8125, the default dogstatsd address.
+//! // Binds to a udp socket on an available ephemeral port on 127.0.0.1 for
+//! // transmitting, and sends to  127.0.0.1:8125, the default dogstatsd
+//! // address.
 //! let default_options = Options::default();
 //! let default_client = Client::new(default_options);
 //!
@@ -97,7 +98,7 @@ impl Options {
     ///
     ///   assert_eq!(
     ///       Options {
-    ///           from_addr: "127.0.0.1:8126".into(),
+    ///           from_addr: "127.0.0.1:0".into(),
     ///           to_addr: "127.0.0.1:8125".into(),
     ///           namespace: String::new(),
     ///       },
@@ -106,7 +107,7 @@ impl Options {
     /// ```
     pub fn default() -> Self {
         Options {
-            from_addr: "127.0.0.1:8126".into(),
+            from_addr: "127.0.0.1:0".into(),
             to_addr: "127.0.0.1:8125".into(),
             namespace: String::new(),
         }
@@ -308,7 +309,7 @@ mod tests {
     fn test_options_default() {
         let options = Options::default();
         let expected_options = Options {
-            from_addr: "127.0.0.1:8126".into(),
+            from_addr: "127.0.0.1:0".into(),
             to_addr: "127.0.0.1:8125".into(),
             namespace: String::new(),
         };
@@ -320,7 +321,7 @@ mod tests {
     fn test_new() {
         let client = Client::new(Options::default());
         let expected_client = Client {
-            from_addr: "127.0.0.1:8126".into(),
+            from_addr: "127.0.0.1:0".into(),
             to_addr: "127.0.0.1:8125".into(),
             namespace: String::new(),
         };
