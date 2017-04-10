@@ -59,6 +59,7 @@
 //! client.gauge("my_gauge", "12345", vec!["tag:1".into(), "tag:2".into()]).unwrap();
 //! ```
 
+#![cfg_attr(feature = "unstable", feature(test))]
 #![deny(warnings, missing_debug_implementations, missing_copy_implementations, missing_docs)]
 extern crate chrono;
 
@@ -342,5 +343,90 @@ mod tests {
         let client = Client::new(options);
         // Shouldn't panic or error
         client.send(GaugeMetric::new("gauge".into(), "1234".into()), vec!["tag1".into(), "tag2".into()]).unwrap();
+    }
+}
+
+#[cfg(all(feature = "unstable", test))]
+mod bench {
+    extern crate test;
+    use self::test::Bencher;
+    use super::*;
+
+    #[bench]
+    fn bench_incr(b: &mut Bencher) {
+        let options = Options::default();
+        let client = Client::new(options);
+        let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
+        b.iter(|| {
+            client.incr("bench.incr", tags.clone()).unwrap();
+        })
+    }
+
+    #[bench]
+    fn bench_decr(b: &mut Bencher) {
+        let options = Options::default();
+        let client = Client::new(options);
+        let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
+        b.iter(|| {
+            client.decr("bench.decr", tags.clone()).unwrap();
+        })
+    }
+
+    #[bench]
+    fn bench_timing(b: &mut Bencher) {
+        let options = Options::default();
+        let client = Client::new(options);
+        let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
+        let mut i = 0;
+        b.iter(|| {
+            client.timing("bench.timing", i, tags.clone()).unwrap();
+            i += 1;
+        })
+    }
+
+    #[bench]
+    fn bench_gauge(b: &mut Bencher) {
+        let options = Options::default();
+        let client = Client::new(options);
+        let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
+        let mut i = 0;
+        b.iter(|| {
+            client.gauge("bench.timing", &i.to_string(), tags.clone()).unwrap();
+            i += 1;
+        })
+    }
+
+    #[bench]
+    fn bench_histogram(b: &mut Bencher) {
+        let options = Options::default();
+        let client = Client::new(options);
+        let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
+        let mut i = 0;
+        b.iter(|| {
+            client.histogram("bench.timing", &i.to_string(), tags.clone()).unwrap();
+            i += 1;
+        })
+    }
+
+    #[bench]
+    fn bench_set(b: &mut Bencher) {
+        let options = Options::default();
+        let client = Client::new(options);
+        let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
+        let mut i = 0;
+        b.iter(|| {
+            client.set("bench.timing", &i.to_string(), tags.clone()).unwrap();
+            i += 1;
+        })
+    }
+
+    #[bench]
+    fn bench_event(b: &mut Bencher) {
+        let options = Options::default();
+        let client = Client::new(options);
+        let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
+        b.iter(|| {
+            client.event("Test Event Title", "Test Event Message", tags.clone()).unwrap();
+        })
     }
 }
