@@ -63,3 +63,11 @@ client.event("My Custom Event Title", "My Custom Event Body", vec![]).unwrap();
 // Add tags to any metric by passing a Vec<String> of tags to apply
 client.gauge("my_gauge", "12345", vec!["tag:1".into(), "tag:2".into()]).unwrap();
 ```
+
+## Benchmarks
+
+Support is provided for running benchmarks of all client commands. Until the
+`Bencher` type is stable Rust, the benchmarks are isolated behind the
+`unstable` feature flag. To run the benchmarks using `rustup`:
+
+    rustup run nightly cargo bench --features=unstable
