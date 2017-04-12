@@ -1,14 +1,14 @@
 use chrono::{DateTime, UTC};
 
-pub fn format_for_send(metric: String, namespace: &str, tags: &[String]) -> String {
+pub fn format_for_send(metric: String, namespace: &str, tags: &[&str]) -> String {
     let mut result = metric;
 
     if namespace != "" {
         result = format!("{}.{}", namespace, result)
     }
 
-    let joined_tags = tags.join(",");
-    if joined_tags != "" {
+    if !tags.is_empty()  {
+        let joined_tags = tags.join(",");
         result = format!("{}|#{}", result, joined_tags)
     }
 
@@ -19,12 +19,12 @@ pub trait Metric {
     fn metric_type_format(&self) -> String;
 }
 
-pub enum CountMetric {
-    Incr(String),
-    Decr(String),
+pub enum CountMetric<'a> {
+    Incr(&'a str),
+    Decr(&'a str),
 }
 
-impl Metric for CountMetric {
+impl<'a> Metric for CountMetric<'a> {
     // my_count:1|c
     // my_count:-1|c
     fn metric_type_format(&self) -> String {
@@ -39,22 +39,22 @@ impl Metric for CountMetric {
     }
 }
 
-pub struct TimeMetric {
-    start_time: DateTime<UTC>,
-    end_time: DateTime<UTC>,
-    stat: String,
+pub struct TimeMetric<'a> {
+    start_time: &'a DateTime<UTC>,
+    end_time: &'a DateTime<UTC>,
+    stat: &'a str,
 }
 
-impl Metric for TimeMetric {
+impl<'a> Metric for TimeMetric<'a> {
     // my_stat:500|ms
     fn metric_type_format(&self) -> String {
-        let dur = self.end_time - self.start_time;
+        let dur = *self.end_time - *self.start_time;
         format!("{}:{}|ms", self.stat, dur.num_milliseconds())
     }
 }
 
-impl TimeMetric {
-    pub fn new(stat: String, start_time: DateTime<UTC>, end_time: DateTime<UTC>) -> Self {
+impl<'a> TimeMetric<'a> {
+    pub fn new(stat: &'a str, start_time: &'a DateTime<UTC>, end_time: &'a DateTime<UTC>) -> Self {
         TimeMetric {
             start_time: start_time,
             end_time: end_time,
@@ -63,20 +63,20 @@ impl TimeMetric {
     }
 }
 
-pub struct TimingMetric {
+pub struct TimingMetric<'a> {
     ms: i64,
-    stat: String,
+    stat: &'a str,
 }
 
-impl Metric for TimingMetric {
+impl<'a> Metric for TimingMetric<'a> {
     // my_stat:500|ms
     fn metric_type_format(&self) -> String {
         format!("{}:{}|ms", self.stat, self.ms)
     }
 }
 
-impl TimingMetric {
-    pub fn new(stat: String, ms: i64) -> Self {
+impl<'a> TimingMetric<'a> {
+    pub fn new(stat: &'a str, ms: i64) -> Self {
         TimingMetric {
             ms: ms,
             stat: stat,
@@ -84,20 +84,20 @@ impl TimingMetric {
     }
 }
 
-pub struct GaugeMetric {
-    stat: String,
-    val: String,
+pub struct GaugeMetric<'a> {
+    stat: &'a str,
+    val: &'a str,
 }
 
-impl Metric for GaugeMetric {
+impl<'a> Metric for GaugeMetric<'a> {
     // my_gauge:1000|g
     fn metric_type_format(&self) -> String {
         format!("{}:{}|g", self.stat, self.val)
     }
 }
 
-impl GaugeMetric {
-    pub fn new(stat: String, val: String) -> Self {
+impl<'a> GaugeMetric<'a> {
+    pub fn new(stat: &'a str, val: &'a str) -> Self {
         GaugeMetric {
             stat: stat,
             val: val,
@@ -105,20 +105,20 @@ impl GaugeMetric {
     }
 }
 
-pub struct HistogramMetric {
-    stat: String,
-    val: String,
+pub struct HistogramMetric<'a> {
+    stat: &'a str,
+    val: &'a str,
 }
 
-impl Metric for HistogramMetric {
+impl<'a> Metric for HistogramMetric<'a> {
     // my_histogram:1000|h
     fn metric_type_format(&self) -> String {
         format!("{}:{}|h", self.stat, self.val)
     }
 }
 
-impl HistogramMetric {
-    pub fn new(stat: String, val: String) -> Self {
+impl<'a> HistogramMetric<'a> {
+    pub fn new(stat: &'a str, val: &'a str) -> Self {
         HistogramMetric {
             stat: stat,
             val: val,
@@ -126,20 +126,20 @@ impl HistogramMetric {
     }
 }
 
-pub struct SetMetric {
-    stat: String,
-    val: String,
+pub struct SetMetric<'a> {
+    stat: &'a str,
+    val: &'a str,
 }
 
-impl Metric for SetMetric {
+impl<'a> Metric for SetMetric<'a> {
     // my_set:45|s
     fn metric_type_format(&self) -> String {
         format!("{}:{}|s", self.stat, self.val)
     }
 }
 
-impl SetMetric {
-    pub fn new(stat: String, val: String) -> Self {
+impl<'a> SetMetric<'a> {
+    pub fn new(stat: &'a str, val: &'a str) -> Self {
         SetMetric {
             stat: stat,
             val: val,
@@ -147,12 +147,12 @@ impl SetMetric {
     }
 }
 
-pub struct Event {
-    title: String,
-    text: String,
+pub struct Event<'a> {
+    title: &'a str,
+    text: &'a str,
 }
 
-impl Metric for Event {
+impl<'a> Metric for Event<'a> {
     fn metric_type_format(&self) -> String {
         format!("_e{{{title_len},{text_len}}}:{title}|{text}",
                 title_len = self.title.len(),
@@ -162,8 +162,8 @@ impl Metric for Event {
     }
 }
 
-impl Event {
-    pub fn new(title: String, text: String) -> Self {
+impl<'a> Event<'a> {
+    pub fn new(title: &'a str, text: &'a str) -> Self {
         Event {
             title: title,
             text: text,
@@ -218,7 +218,7 @@ mod tests {
     fn test_time_metric() {
         let start_time = UTC.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 0);
         let end_time = UTC.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 900);
-        let metric = TimeMetric::new("time".into(), start_time, end_time);
+        let metric = TimeMetric::new("time".into(), &start_time, &end_time);
 
         assert_eq!("time:900|ms", metric.metric_type_format())
     }
