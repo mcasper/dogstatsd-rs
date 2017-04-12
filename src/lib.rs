@@ -28,7 +28,7 @@
 //! ```
 //! use dogstatsd::{Client, Options};
 //!
-//! let client = Client::new(Options::default());
+//! let client = Client::new(Options::default()).unwrap();
 //!
 //! // Increment a counter
 //! client.incr("my_counter", vec![]).unwrap();
@@ -133,11 +133,21 @@ impl Options {
 }
 
 /// The client struct that handles sending metrics to the Dogstatsd server.
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct Client {
+    socket: UdpSocket,
     from_addr: String,
     to_addr: String,
     namespace: String,
+}
+
+impl PartialEq for Client {
+    fn eq(&self, other: &Self) -> bool {
+        // Ignore `socket`, which will never be the same
+        self.from_addr == other.from_addr &&
+        self.to_addr == other.to_addr &&
+        self.namespace == other.namespace
+    }
 }
 
 impl Client {
@@ -148,14 +158,15 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default());
+    ///   let client = Client::new(Options::default()).unwrap();
     /// ```
-    pub fn new(options: Options) -> Self {
-        Client {
+    pub fn new(options: Options) -> Result<Self, DogstatsdError> {
+        Ok(Client {
+            socket: try!(UdpSocket::bind(&options.from_addr[..])),
             from_addr: options.from_addr,
             to_addr: options.to_addr,
             namespace: options.namespace,
-        }
+        })
     }
 
     /// Increment a StatsD counter
@@ -166,7 +177,7 @@ impl Client {
     ///   use dogstatsd::{Client, Options};
     ///
     ///
-    ///   let client = Client::new(Options::default());
+    ///   let client = Client::new(Options::default()).unwrap();
     ///   client.incr("counter", vec!["tag:counter".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
@@ -182,7 +193,7 @@ impl Client {
     ///   use dogstatsd::{Client, Options};
     ///
     ///
-    ///   let client = Client::new(Options::default());
+    ///   let client = Client::new(Options::default()).unwrap();
     ///   client.decr("counter", vec!["tag:counter".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
@@ -200,7 +211,7 @@ impl Client {
     ///   use std::time::Duration;
     ///
     ///
-    ///   let client = Client::new(Options::default());
+    ///   let client = Client::new(Options::default()).unwrap();
     ///   client.time("timer", vec!["tag:time".into()], || {
     ///       thread::sleep(Duration::from_millis(200))
     ///   }).unwrap_or_else(|e| println!("Encountered error: {}", e))
@@ -221,7 +232,7 @@ impl Client {
     ///   use dogstatsd::{Client, Options};
     ///
     ///
-    ///   let client = Client::new(Options::default());
+    ///   let client = Client::new(Options::default()).unwrap();
     ///   client.timing("timing", 350, vec!["tag:timing".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
@@ -236,7 +247,7 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default());
+    ///   let client = Client::new(Options::default()).unwrap();
     ///   client.gauge("gauge", "12345", vec!["tag:gauge".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
@@ -251,7 +262,7 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default());
+    ///   let client = Client::new(Options::default()).unwrap();
     ///   client.histogram("histogram", "67890", vec!["tag:histogram".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
@@ -266,7 +277,7 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default());
+    ///   let client = Client::new(Options::default()).unwrap();
     ///   client.set("set", "13579", vec!["tag:set".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
@@ -281,7 +292,7 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default());
+    ///   let client = Client::new(Options::default()).unwrap();
     ///   client.event("Event Title", "Event Body", vec!["tag:event".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
@@ -290,15 +301,9 @@ impl Client {
     }
 
     fn send<M: Metric>(&self, metric: M, tags: Vec<String>) -> DogstatsdResult {
-        let socket = try!(self.socket());
         let formatted_metric = format_for_send(metric.metric_type_format(), &self.namespace[..], tags.as_slice());
-        try!(socket.send_to(formatted_metric.as_bytes(), &self.to_addr[..]));
+        try!(self.socket.send_to(formatted_metric.as_bytes(), &self.to_addr[..]));
         Ok(())
-    }
-
-    fn socket(&self) -> Result<UdpSocket, DogstatsdError> {
-        let socket = try!(UdpSocket::bind(&self.from_addr[..]));
-        Ok(socket)
     }
 }
 
@@ -320,8 +325,9 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let client = Client::new(Options::default());
+        let client = Client::new(Options::default()).unwrap();
         let expected_client = Client {
+            socket: UdpSocket::bind("127.0.0.1:0").unwrap(),
             from_addr: "127.0.0.1:0".into(),
             to_addr: "127.0.0.1:8125".into(),
             namespace: String::new(),
@@ -330,18 +336,11 @@ mod tests {
         assert_eq!(expected_client, client)
     }
 
-    #[test]
-    fn test_socket() {
-        let client = Client::new(Options::default());
-        // Shouldn't panic or error
-        client.socket().unwrap();
-    }
-
     use metrics::GaugeMetric;
     #[test]
     fn test_send() {
         let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "");
-        let client = Client::new(options);
+        let client = Client::new(options).unwrap();
         // Shouldn't panic or error
         client.send(GaugeMetric::new("gauge".into(), "1234".into()), vec!["tag1".into(), "tag2".into()]).unwrap();
     }
@@ -356,7 +355,7 @@ mod bench {
     #[bench]
     fn bench_incr(b: &mut Bencher) {
         let options = Options::default();
-        let client = Client::new(options);
+        let client = Client::new(options).unwrap();
         let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
         b.iter(|| {
             client.incr("bench.incr", tags.clone()).unwrap();
@@ -366,7 +365,7 @@ mod bench {
     #[bench]
     fn bench_decr(b: &mut Bencher) {
         let options = Options::default();
-        let client = Client::new(options);
+        let client = Client::new(options).unwrap();
         let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
         b.iter(|| {
             client.decr("bench.decr", tags.clone()).unwrap();
@@ -376,7 +375,7 @@ mod bench {
     #[bench]
     fn bench_timing(b: &mut Bencher) {
         let options = Options::default();
-        let client = Client::new(options);
+        let client = Client::new(options).unwrap();
         let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
         let mut i = 0;
         b.iter(|| {
@@ -388,7 +387,7 @@ mod bench {
     #[bench]
     fn bench_gauge(b: &mut Bencher) {
         let options = Options::default();
-        let client = Client::new(options);
+        let client = Client::new(options).unwrap();
         let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
         let mut i = 0;
         b.iter(|| {
@@ -400,7 +399,7 @@ mod bench {
     #[bench]
     fn bench_histogram(b: &mut Bencher) {
         let options = Options::default();
-        let client = Client::new(options);
+        let client = Client::new(options).unwrap();
         let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
         let mut i = 0;
         b.iter(|| {
@@ -412,7 +411,7 @@ mod bench {
     #[bench]
     fn bench_set(b: &mut Bencher) {
         let options = Options::default();
-        let client = Client::new(options);
+        let client = Client::new(options).unwrap();
         let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
         let mut i = 0;
         b.iter(|| {
@@ -424,7 +423,7 @@ mod bench {
     #[bench]
     fn bench_event(b: &mut Bencher) {
         let options = Options::default();
-        let client = Client::new(options);
+        let client = Client::new(options).unwrap();
         let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
         b.iter(|| {
             client.event("Test Event Title", "Test Event Message", tags.clone()).unwrap();
