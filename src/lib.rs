@@ -65,6 +65,7 @@ extern crate chrono;
 
 use chrono::UTC;
 use std::net::UdpSocket;
+use std::borrow::Cow;
 
 mod error;
 use self::error::DogstatsdError;
@@ -169,8 +170,12 @@ impl Client {
     ///   client.incr("counter", &["tag:counter".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn incr<'a, S: Into<&'a str>>(&self, stat: S, tags: &[&str]) -> DogstatsdResult {
-        self.send(CountMetric::Incr(stat.into()), tags)
+    pub fn incr<'a, S: Into<Cow<'a, str>>>(&self, stat: S, tags: &[&str]) -> DogstatsdResult {
+        match stat.into() {
+            Cow::Borrowed(stat) => self.send(CountMetric::Incr(stat), tags),
+            Cow::Owned(stat) => self.send(CountMetric::Incr(&stat), tags)
+        }
+
     }
 
     /// Decrement a StatsD counter
@@ -185,8 +190,12 @@ impl Client {
     ///   client.decr("counter", &["tag:counter".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn decr<'a, S: Into<&'a str>>(&self, stat: S, tags: &[&str]) -> DogstatsdResult {
-        self.send(CountMetric::Decr(stat.into()), tags)
+    pub fn decr<'a, S: Into<Cow<'a, str>>>(&self, stat: S, tags: &[&str]) -> DogstatsdResult {
+        match stat.into() {
+            Cow::Borrowed(stat) => self.send(CountMetric::Decr(stat), tags),
+            Cow::Owned(stat) => self.send(CountMetric::Decr(&stat), tags)
+        }
+
     }
 
     /// Time how long it takes for a block of code to execute.
@@ -204,12 +213,15 @@ impl Client {
     ///       thread::sleep(Duration::from_millis(200))
     ///   }).unwrap_or_else(|e| println!("Encountered error: {}", e))
     /// ```
-    pub fn time<'a, S: Into<&'a str>, F: FnOnce()>(&self, stat: S, tags: &[&str], block: F) -> DogstatsdResult {
+    pub fn time<'a, S: Into<Cow<'a, str>>, F: FnOnce()>(&self, stat: S, tags: &[&str], block: F) -> DogstatsdResult {
         let start_time = UTC::now();
         block();
         let end_time = UTC::now();
 
-        self.send(TimeMetric::new(stat.into(), &start_time, &end_time), tags)
+        match stat.into() {
+            Cow::Borrowed(stat) => self.send(TimeMetric::new(stat, &start_time, &end_time), tags),
+            Cow::Owned(stat) => self.send(TimeMetric::new(&stat, &start_time, &end_time), tags)
+        }
     }
 
     /// Send your own timing metric in milliseconds
@@ -224,8 +236,11 @@ impl Client {
     ///   client.timing("timing", 350, &["tag:timing".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn timing<'a, S: Into<&'a str>>(&self, stat: S, ms: i64, tags: &[&str]) -> DogstatsdResult {
-        self.send(TimingMetric::new(stat.into(), ms), tags)
+    pub fn timing<'a, S: Into<Cow<'a, str>>>(&self, stat: S, ms: i64, tags: &[&str]) -> DogstatsdResult {
+        match stat.into() {
+            Cow::Borrowed(stat) => self.send(TimingMetric::new(stat, ms), tags),
+            Cow::Owned(stat) => self.send(TimingMetric::new(&stat, ms), tags)
+        }
     }
 
     /// Report an arbitrary value as a gauge
@@ -239,8 +254,13 @@ impl Client {
     ///   client.gauge("gauge", "12345", &["tag:gauge".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn gauge<'a, S: Into<&'a str>>(&self, stat: S, val: S, tags: &[&str]) -> DogstatsdResult {
-        self.send(GaugeMetric::new(stat.into(), val.into()), tags)
+    pub fn gauge<'a, S: Into<Cow<'a, str>>>(&self, stat: S, val: S, tags: &[&str]) -> DogstatsdResult {
+        match (stat.into(), val.into()) {
+            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(GaugeMetric::new(stat, val), tags),
+            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(GaugeMetric::new(&stat, val), tags),
+            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(GaugeMetric::new(stat, &val), tags),
+            (Cow::Owned(stat), Cow::Owned(val)) => self.send(GaugeMetric::new(&stat, &val), tags)
+        }
     }
 
     /// Report a value in a histogram
@@ -254,8 +274,13 @@ impl Client {
     ///   client.histogram("histogram", "67890", &["tag:histogram".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn histogram<'a, S: Into<&'a str>>(&self, stat: S, val: S, tags: &[&str]) -> DogstatsdResult {
-        self.send(HistogramMetric::new(stat.into(), val.into()), tags)
+    pub fn histogram<'a, S: Into<Cow<'a, str>>>(&self, stat: S, val: S, tags: &[&str]) -> DogstatsdResult {
+        match (stat.into(), val.into()) {
+            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(HistogramMetric::new(stat, val), tags),
+            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(HistogramMetric::new(&stat, val), tags),
+            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(HistogramMetric::new(stat, &val), tags),
+            (Cow::Owned(stat), Cow::Owned(val)) => self.send(HistogramMetric::new(&stat, &val), tags)
+        }
     }
 
     /// Report a value in a set
@@ -269,8 +294,13 @@ impl Client {
     ///   client.set("set", "13579", &["tag:set".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn set<'a, S: Into<&'a str>>(&self, stat: S, val: S, tags: &[&str]) -> DogstatsdResult {
-        self.send(SetMetric::new(stat.into(), val.into()), tags)
+    pub fn set<'a, S: Into<Cow<'a, str>>>(&self, stat: S, val: S, tags: &[&str]) -> DogstatsdResult {
+        match (stat.into(), val.into()) {
+            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(SetMetric::new(stat, val), tags),
+            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(SetMetric::new(&stat, val), tags),
+            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(SetMetric::new(stat, &val), tags),
+            (Cow::Owned(stat), Cow::Owned(val)) => self.send(SetMetric::new(&stat, &val), tags)
+        }
     }
 
     /// Send a custom event as a title and a body
@@ -284,8 +314,13 @@ impl Client {
     ///   client.event("Event Title", "Event Body", &["tag:event".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn event<'a, S: Into<&'a str>>(&self, title: S, text: S, tags: &[&str]) -> DogstatsdResult {
-        self.send(Event::new(title.into(), text.into()), tags)
+    pub fn event<'a, S: Into<Cow<'a, str>>>(&self, title: S, text: S, tags: &[&str]) -> DogstatsdResult {
+        match (title.into(), text.into()) {
+            (Cow::Borrowed(title), Cow::Borrowed(text)) => self.send(Event::new(title, text), tags),
+            (Cow::Owned(title), Cow::Borrowed(text)) => self.send(Event::new(&title, text), tags),
+            (Cow::Borrowed(title), Cow::Owned(text)) => self.send(Event::new(title, &text), tags),
+            (Cow::Owned(title), Cow::Owned(text)) => self.send(Event::new(&title, &text), tags)
+        }
     }
 
     fn send<M: Metric>(&self, metric: M, tags: &[&str]) -> DogstatsdResult {
