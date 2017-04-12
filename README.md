@@ -17,8 +17,8 @@ Build an options struct and create a client:
 ```rust
 use dogstatsd::{Client, Options};
 
-// Binds to a udp socket on 127.0.0.1:8126 for transmitting, and sends to
-// 127.0.0.1:8125, the default dogstatsd address.
+// Binds to a udp socket on an available ephemeral port on 127.0.0.1 for
+// transmitting, and sends to 127.0.0.1:8125, the default dogstatsd address.
 let default_options = Options::default();
 let default_client = Client::new(default_options);
 
