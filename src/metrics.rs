@@ -1,18 +1,22 @@
 use chrono::{DateTime, UTC};
 
 pub fn format_for_send(metric: String, namespace: &str, tags: &[&str]) -> String {
-    let mut result = metric;
+    let mut buf = String::with_capacity(metric.len() + namespace.len() + tags.len());
 
-    if namespace != "" {
-        result = format!("{}.{}", namespace, result)
+    if !namespace.is_empty() {
+        buf.push_str(namespace);
+        buf.push_str(".")
     }
+
+    buf.push_str(&metric);
 
     if !tags.is_empty()  {
         let joined_tags = tags.join(",");
-        result = format!("{}|#{}", result, joined_tags)
+        buf.push_str("|#");
+        buf.push_str(&joined_tags);
     }
 
-    result
+    buf
 }
 
 pub trait Metric {
@@ -30,10 +34,16 @@ impl<'a> Metric for CountMetric<'a> {
     fn metric_type_format(&self) -> String {
         match *self {
             CountMetric::Incr(ref stat) => {
-                format!("{}:1|c", stat)
+                let mut buf = String::with_capacity(3 + stat.len() + 4);
+                buf.push_str(stat);
+                buf.push_str(":1|c");
+                buf
             },
             CountMetric::Decr(ref stat) => {
-                format!("{}:-1|c", stat)
+                let mut buf = String::with_capacity(3 + stat.len() + 4);
+                buf.push_str(stat);
+                buf.push_str(":1|c");
+                buf
             },
         }
     }
@@ -49,7 +59,12 @@ impl<'a> Metric for TimeMetric<'a> {
     // my_stat:500|ms
     fn metric_type_format(&self) -> String {
         let dur = *self.end_time - *self.start_time;
-        format!("{}:{}|ms", self.stat, dur.num_milliseconds())
+        let mut buf = String::with_capacity(3 + self.stat.len() + 11);
+        buf.push_str(self.stat);
+        buf.push_str(":");
+        buf.push_str(&dur.num_milliseconds().to_string());
+        buf.push_str("|ms");
+        buf
     }
 }
 
@@ -92,7 +107,12 @@ pub struct GaugeMetric<'a> {
 impl<'a> Metric for GaugeMetric<'a> {
     // my_gauge:1000|g
     fn metric_type_format(&self) -> String {
-        format!("{}:{}|g", self.stat, self.val)
+        let mut buf = String::with_capacity(3 + self.stat.len() + self.val.len());
+        buf.push_str(self.stat);
+        buf.push_str(":");
+        buf.push_str(self.val);
+        buf.push_str("|g");
+        buf
     }
 }
 
@@ -113,7 +133,12 @@ pub struct HistogramMetric<'a> {
 impl<'a> Metric for HistogramMetric<'a> {
     // my_histogram:1000|h
     fn metric_type_format(&self) -> String {
-        format!("{}:{}|h", self.stat, self.val)
+        let mut buf = String::with_capacity(3 + self.stat.len() + self.val.len());
+        buf.push_str(self.stat);
+        buf.push_str(":");
+        buf.push_str(self.val);
+        buf.push_str("|h");
+        buf
     }
 }
 
@@ -134,7 +159,12 @@ pub struct SetMetric<'a> {
 impl<'a> Metric for SetMetric<'a> {
     // my_set:45|s
     fn metric_type_format(&self) -> String {
-        format!("{}:{}|s", self.stat, self.val)
+        let mut buf = String::with_capacity(3 + self.stat.len() + self.val.len());
+        buf.push_str(self.stat);
+        buf.push_str(":");
+        buf.push_str(self.val);
+        buf.push_str("|s");
+        buf
     }
 }
 
@@ -257,5 +287,42 @@ mod tests {
 
         assert_eq!("_e{11,31}:Event Title|Event Body - Something Happened",
                    metric.metric_type_format())
+    }
+}
+
+#[cfg(all(feature = "unstable", test))]
+mod bench {
+    extern crate test;
+
+    use self::test::Bencher;
+    use super::*;
+
+    #[bench]
+    fn bench_format_for_send(b: &mut Bencher) {
+        b.iter(|| {
+            format_for_send("metric".to_owned(), "foo", &["bar", "baz"]);
+        })
+    }
+
+
+    #[bench]
+    fn bench_set_metric(b: &mut Bencher) {
+        let metric = SetMetric {
+            stat: "blahblahblah-blahblahblah",
+            val: "valuel"
+        };
+
+        b.iter(|| {
+            metric.metric_type_format()
+        })
+    }
+
+    #[bench]
+    fn bench_set_counter(b: &mut Bencher) {
+        let metric = CountMetric::Incr("foo");
+
+        b.iter(|| {
+            metric.metric_type_format()
+        })
     }
 }
