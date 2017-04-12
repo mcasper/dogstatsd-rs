@@ -1,19 +1,21 @@
 use chrono::{DateTime, UTC};
 
-pub fn format_for_send(metric: String, namespace: &str, tags: &[&str]) -> String {
-    let mut buf = String::with_capacity(metric.len() + namespace.len() + tags.len());
+pub fn format_for_send(metric: &str, namespace: &str, tags: &[&str]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(metric.len() + namespace.len());
 
     if !namespace.is_empty() {
-        buf.push_str(namespace);
-        buf.push_str(".")
+        buf.extend_from_slice(namespace.as_bytes());
+        buf.extend_from_slice(b".")
     }
 
-    buf.push_str(&metric);
+    buf.extend_from_slice(metric.as_bytes());
 
     if !tags.is_empty()  {
+        buf.extend_from_slice(b"|#");
+
         let joined_tags = tags.join(",");
-        buf.push_str("|#");
-        buf.push_str(&joined_tags);
+        buf.reserve(joined_tags.len());
+        buf.extend_from_slice(&joined_tags.as_bytes());
     }
 
     buf
@@ -42,7 +44,7 @@ impl<'a> Metric for CountMetric<'a> {
             CountMetric::Decr(ref stat) => {
                 let mut buf = String::with_capacity(3 + stat.len() + 4);
                 buf.push_str(stat);
-                buf.push_str(":1|c");
+                buf.push_str(":-1|c");
                 buf
             },
         }
@@ -86,7 +88,13 @@ pub struct TimingMetric<'a> {
 impl<'a> Metric for TimingMetric<'a> {
     // my_stat:500|ms
     fn metric_type_format(&self) -> String {
-        format!("{}:{}|ms", self.stat, self.ms)
+        let ms = self.ms.to_string();
+        let mut buf = String::with_capacity(3 + self.stat.len() + ms.len());
+        buf.push_str(self.stat);
+        buf.push_str(":");
+        buf.push_str(&ms);
+        buf.push_str("|ms");
+        buf
     }
 }
 
@@ -184,11 +192,18 @@ pub struct Event<'a> {
 
 impl<'a> Metric for Event<'a> {
     fn metric_type_format(&self) -> String {
-        format!("_e{{{title_len},{text_len}}}:{title}|{text}",
-                title_len = self.title.len(),
-                text_len = self.text.len(),
-                title = self.title,
-                text = self.text)
+        let title_len = self.title.len().to_string();
+        let text_len = self.text.len().to_string();
+        let mut buf = String::with_capacity(self.title.len() + self.text.len() + title_len.len() + text_len.len() + 6);
+        buf.push_str("_e{");
+        buf.push_str(&title_len);
+        buf.push_str(",");
+        buf.push_str(&text_len);
+        buf.push_str("}:");
+        buf.push_str(self.title);
+        buf.push_str("|");
+        buf.push_str(self.text);
+        buf
     }
 }
 
@@ -209,24 +224,24 @@ mod tests {
     #[test]
     fn test_format_for_send_no_tags() {
         assert_eq!(
-            "namespace.metric:val|v".to_string(),
-            format_for_send("metric:val|v".to_string(), "namespace", &[])
+            &b"namespace.metric:val|v"[..],
+            &format_for_send("metric:val|v", "namespace", &[])[..]
         )
     }
 
     #[test]
     fn test_format_for_send_no_namespace() {
         assert_eq!(
-            "metric:val|v|#tag:1,tag:2".to_string(),
-            format_for_send("metric:val|v".to_string(), "", &["tag:1".into(), "tag:2".into()])
+            &b"metric:val|v|#tag:1,tag:2"[..],
+            &format_for_send("metric:val|v", "", &["tag:1".into(), "tag:2".into()])[..]
         )
     }
 
     #[test]
     fn test_format_for_send_everything() {
         assert_eq!(
-            "namespace.metric:val|v|#tag:1,tag:2".to_string(),
-            format_for_send("metric:val|v".to_string(), "namespace", &["tag:1".into(), "tag:2".into()])
+            &b"namespace.metric:val|v|#tag:1,tag:2"[..],
+            &format_for_send("metric:val|v", "namespace", &["tag:1".into(), "tag:2".into()])[..]
         )
     }
 
@@ -300,7 +315,7 @@ mod bench {
     #[bench]
     fn bench_format_for_send(b: &mut Bencher) {
         b.iter(|| {
-            format_for_send("metric".to_owned(), "foo", &["bar", "baz"]);
+            format_for_send("metric", "foo", &["bar", "baz"]);
         })
     }
 

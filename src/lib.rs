@@ -30,33 +30,33 @@
 //! let client = Client::new(Options::default());
 //!
 //! // Increment a counter
-//! client.incr("my_counter", vec![]).unwrap();
+//! client.incr("my_counter", &[]).unwrap();
 //!
 //! // Decrement a counter
-//! client.decr("my_counter", vec![]).unwrap();
+//! client.decr("my_counter", &[]).unwrap();
 //!
 //! // Time a block of code (reports in ms)
-//! client.time("my_time", vec![], || {
+//! client.time("my_time", &[], || {
 //!     // Some time consuming code
 //! }).unwrap();
 //!
 //! // Report your own timing in ms
-//! client.timing("my_timing", 500, vec![]).unwrap();
+//! client.timing("my_timing", 500, &[]).unwrap();
 //!
 //! // Report an arbitrary value (a gauge)
-//! client.gauge("my_gauge", "12345", vec![]).unwrap();
+//! client.gauge("my_gauge", "12345", &[]).unwrap();
 //!
 //! // Report a sample of a histogram
-//! client.histogram("my_histogram", "67890", vec![]).unwrap();
+//! client.histogram("my_histogram", "67890", &[]).unwrap();
 //!
 //! // Report a member of a set
-//! client.set("my_set", "13579", vec![]).unwrap();
+//! client.set("my_set", "13579", &[]).unwrap();
 //!
 //! // Send a custom event
-//! client.event("My Custom Event Title", "My Custom Event Body", vec![]).unwrap();
+//! client.event("My Custom Event Title", "My Custom Event Body", &[]).unwrap();
 //!
 //! // Add tags to any metric by passing a Vec<String> of tags to apply
-//! client.gauge("my_gauge", "12345", vec!["tag:1".into(), "tag:2".into()]).unwrap();
+//! client.gauge("my_gauge", "12345", &["tag:1".into(), "tag:2".into()]).unwrap();
 //! ```
 
 #![cfg_attr(feature = "unstable", feature(test))]
@@ -166,7 +166,7 @@ impl Client {
     ///
     ///
     ///   let client = Client::new(Options::default());
-    ///   client.incr("counter", vec!["tag:counter".into()])
+    ///   client.incr("counter", &["tag:counter".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn incr<'a, S: Into<&'a str>>(&self, stat: S, tags: &[&str]) -> DogstatsdResult {
@@ -182,7 +182,7 @@ impl Client {
     ///
     ///
     ///   let client = Client::new(Options::default());
-    ///   client.decr("counter", vec!["tag:counter".into()])
+    ///   client.decr("counter", &["tag:counter".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn decr<'a, S: Into<&'a str>>(&self, stat: S, tags: &[&str]) -> DogstatsdResult {
@@ -200,7 +200,7 @@ impl Client {
     ///
     ///
     ///   let client = Client::new(Options::default());
-    ///   client.time("timer", vec!["tag:time".into()], || {
+    ///   client.time("timer", &["tag:time".into()], || {
     ///       thread::sleep(Duration::from_millis(200))
     ///   }).unwrap_or_else(|e| println!("Encountered error: {}", e))
     /// ```
@@ -221,7 +221,7 @@ impl Client {
     ///
     ///
     ///   let client = Client::new(Options::default());
-    ///   client.timing("timing", 350, vec!["tag:timing".into()])
+    ///   client.timing("timing", 350, &["tag:timing".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn timing<'a, S: Into<&'a str>>(&self, stat: S, ms: i64, tags: &[&str]) -> DogstatsdResult {
@@ -236,7 +236,7 @@ impl Client {
     ///   use dogstatsd::{Client, Options};
     ///
     ///   let client = Client::new(Options::default());
-    ///   client.gauge("gauge", "12345", vec!["tag:gauge".into()])
+    ///   client.gauge("gauge", "12345", &["tag:gauge".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn gauge<'a, S: Into<&'a str>>(&self, stat: S, val: S, tags: &[&str]) -> DogstatsdResult {
@@ -251,7 +251,7 @@ impl Client {
     ///   use dogstatsd::{Client, Options};
     ///
     ///   let client = Client::new(Options::default());
-    ///   client.histogram("histogram", "67890", vec!["tag:histogram".into()])
+    ///   client.histogram("histogram", "67890", &["tag:histogram".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn histogram<'a, S: Into<&'a str>>(&self, stat: S, val: S, tags: &[&str]) -> DogstatsdResult {
@@ -266,7 +266,7 @@ impl Client {
     ///   use dogstatsd::{Client, Options};
     ///
     ///   let client = Client::new(Options::default());
-    ///   client.set("set", "13579", vec!["tag:set".into()])
+    ///   client.set("set", "13579", &["tag:set".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn set<'a, S: Into<&'a str>>(&self, stat: S, val: S, tags: &[&str]) -> DogstatsdResult {
@@ -281,7 +281,7 @@ impl Client {
     ///   use dogstatsd::{Client, Options};
     ///
     ///   let client = Client::new(Options::default());
-    ///   client.event("Event Title", "Event Body", vec!["tag:event".into()])
+    ///   client.event("Event Title", "Event Body", &["tag:event".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn event<'a, S: Into<&'a str>>(&self, title: S, text: S, tags: &[&str]) -> DogstatsdResult {
@@ -290,8 +290,8 @@ impl Client {
 
     fn send<M: Metric>(&self, metric: M, tags: &[&str]) -> DogstatsdResult {
         let socket = try!(self.socket());
-        let formatted_metric = format_for_send(metric.metric_type_format(), &self.namespace[..], tags);
-        try!(socket.send_to(formatted_metric.as_bytes(), &self.to_addr[..]));
+        let formatted_metric = format_for_send(&metric.metric_type_format(), &self.namespace[..], tags);
+        try!(socket.send_to(&formatted_metric[..], &self.to_addr[..]));
         Ok(())
     }
 
@@ -342,7 +342,7 @@ mod tests {
         let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "");
         let client = Client::new(options);
         // Shouldn't panic or error
-        client.send(GaugeMetric::new("gauge".into(), "1234".into()), &vec!["tag1".into(), "tag2".into()]).unwrap();
+        client.send(GaugeMetric::new("gauge".into(), "1234".into()), &["tag1".into(), "tag2".into()]).unwrap();
     }
 }
 
@@ -356,9 +356,9 @@ mod bench {
     fn bench_incr(b: &mut Bencher) {
         let options = Options::default();
         let client = Client::new(options);
-        let tags = vec!["name1:value1"];
+        let tags = &["name1:value1"];
         b.iter(|| {
-            client.incr("bench.incr", &tags).unwrap();
+            client.incr("bench.incr", tags).unwrap();
         })
     }
 
@@ -366,9 +366,9 @@ mod bench {
     fn bench_decr(b: &mut Bencher) {
         let options = Options::default();
         let client = Client::new(options);
-        let tags = vec!["name1:value1"];
+        let tags = &["name1:value1"];
         b.iter(|| {
-            client.decr("bench.decr", &tags).unwrap();
+            client.decr("bench.decr", tags).unwrap();
         })
     }
 
@@ -376,10 +376,10 @@ mod bench {
     fn bench_timing(b: &mut Bencher) {
         let options = Options::default();
         let client = Client::new(options);
-        let tags = vec!["name1:value1"];
+        let tags = &["name1:value1"];
         let mut i = 0;
         b.iter(|| {
-            client.timing("bench.timing", i, &tags).unwrap();
+            client.timing("bench.timing", i, tags).unwrap();
             i += 1;
         })
     }
