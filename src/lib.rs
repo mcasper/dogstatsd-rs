@@ -1,4 +1,4 @@
-  //! A Rust client for interacting with Dogstatsd
+//! A Rust client for interacting with Dogstatsd
 //!
 //! Dogstatsd is a custom `StatsD` implementation by `DataDog` for sending metrics and events to their
 //! system. Through this client you can report any type of metric you want, tag it, and enjoy your
@@ -15,12 +15,12 @@
 //! // transmitting, and sends to  127.0.0.1:8125, the default dogstatsd
 //! // address.
 //! let default_options = Options::default();
-//! let default_client = Client::new(default_options);
+//! let default_client = Client::new(default_options).unwrap();
 //!
 //! // Binds to 127.0.0.1:9000 for transmitting and sends to 10.1.2.3:8125, with a
 //! // namespace of "analytics".
 //! let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics");
-//! let custom_client = Client::new(custom_options);
+//! let custom_client = Client::new(custom_options).unwrap();
 //! ```
 //!
 //! Start sending metrics:
@@ -29,35 +29,33 @@
 //! use dogstatsd::{Client, Options};
 //!
 //! let client = Client::new(Options::default()).unwrap();
+//! let tags = &["env:production"];
 //!
 //! // Increment a counter
-//! client.incr("my_counter", &[]).unwrap();
+//! client.incr("my_counter", tags).unwrap();
 //!
 //! // Decrement a counter
-//! client.decr("my_counter", &[]).unwrap();
+//! client.decr("my_counter", tags).unwrap();
 //!
 //! // Time a block of code (reports in ms)
-//! client.time("my_time", &[], || {
+//! client.time("my_time", tags, || {
 //!     // Some time consuming code
 //! }).unwrap();
 //!
 //! // Report your own timing in ms
-//! client.timing("my_timing", 500, &[]).unwrap();
+//! client.timing("my_timing", 500, tags).unwrap();
 //!
 //! // Report an arbitrary value (a gauge)
-//! client.gauge("my_gauge", "12345", &[]).unwrap();
+//! client.gauge("my_gauge", "12345", tags).unwrap();
 //!
 //! // Report a sample of a histogram
-//! client.histogram("my_histogram", "67890", &[]).unwrap();
+//! client.histogram("my_histogram", "67890", tags).unwrap();
 //!
 //! // Report a member of a set
-//! client.set("my_set", "13579", &[]).unwrap();
+//! client.set("my_set", "13579", tags).unwrap();
 //!
 //! // Send a custom event
-//! client.event("My Custom Event Title", "My Custom Event Body", &[]).unwrap();
-//!
-//! // Add tags to any metric by passing a Vec<String> of tags to apply
-//! client.gauge("my_gauge", "12345", &["tag:1".into(), "tag:2".into()]).unwrap();
+//! client.event("My Custom Event Title", "My Custom Event Body", tags).unwrap();
 //! ```
 
 #![cfg_attr(feature = "unstable", feature(test))]
@@ -177,17 +175,19 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.incr("counter", &["tag:counter".into()])
+    ///   client.incr("counter", &["tag:counter"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn incr<'a, S: Into<Cow<'a, str>>>(&self, stat: S, tags: &[&str]) -> DogstatsdResult {
+    pub fn incr<'a, I, S, T>(&self, stat: S, tags: I) -> DogstatsdResult
+        where I: IntoIterator<Item=T>,
+              S: Into<Cow<'a, str>>,
+              T: AsRef<str>,
+    {
         match stat.into() {
             Cow::Borrowed(stat) => self.send(CountMetric::Incr(stat), tags),
             Cow::Owned(stat) => self.send(CountMetric::Incr(&stat), tags)
         }
-
     }
 
     /// Decrement a StatsD counter
@@ -197,17 +197,19 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.decr("counter", &["tag:counter".into()])
+    ///   client.decr("counter", &["tag:counter"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn decr<'a, S: Into<Cow<'a, str>>>(&self, stat: S, tags: &[&str]) -> DogstatsdResult {
+    pub fn decr<'a, I, S, T>(&self, stat: S, tags: I) -> DogstatsdResult
+        where I: IntoIterator<Item=T>,
+              S: Into<Cow<'a, str>>,
+              T: AsRef<str>,
+    {
         match stat.into() {
             Cow::Borrowed(stat) => self.send(CountMetric::Decr(stat), tags),
             Cow::Owned(stat) => self.send(CountMetric::Decr(&stat), tags)
         }
-
     }
 
     /// Time how long it takes for a block of code to execute.
@@ -219,13 +221,17 @@ impl Client {
     ///   use std::thread;
     ///   use std::time::Duration;
     ///
-    ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.time("timer", &["tag:time".into()], || {
+    ///   client.time("timer", &["tag:time"], || {
     ///       thread::sleep(Duration::from_millis(200))
     ///   }).unwrap_or_else(|e| println!("Encountered error: {}", e))
     /// ```
-    pub fn time<'a, S: Into<Cow<'a, str>>, F: FnOnce()>(&self, stat: S, tags: &[&str], block: F) -> DogstatsdResult {
+    pub fn time<'a, F, I, S, T>(&self, stat: S, tags: I, block: F) -> DogstatsdResult
+        where F: FnOnce(),
+              I: IntoIterator<Item=T>,
+              S: Into<Cow<'a, str>>,
+              T: AsRef<str>,
+    {
         let start_time = UTC::now();
         block();
         let end_time = UTC::now();
@@ -243,12 +249,15 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.timing("timing", 350, &["tag:timing".into()])
+    ///   client.timing("timing", 350, &["tag:timing"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn timing<'a, S: Into<Cow<'a, str>>>(&self, stat: S, ms: i64, tags: &[&str]) -> DogstatsdResult {
+    pub fn timing<'a, I, S, T>(&self, stat: S, ms: i64, tags: I) -> DogstatsdResult
+        where I: IntoIterator<Item=T>,
+              S: Into<Cow<'a, str>>,
+              T: AsRef<str>,
+    {
         match stat.into() {
             Cow::Borrowed(stat) => self.send(TimingMetric::new(stat, ms), tags),
             Cow::Owned(stat) => self.send(TimingMetric::new(&stat, ms), tags)
@@ -263,10 +272,14 @@ impl Client {
     ///   use dogstatsd::{Client, Options};
     ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.gauge("gauge", "12345", &["tag:gauge".into()])
+    ///   client.gauge("gauge", "12345", &["tag:gauge"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn gauge<'a, S: Into<Cow<'a, str>>>(&self, stat: S, val: S, tags: &[&str]) -> DogstatsdResult {
+    pub fn gauge<'a, I, S, T>(&self, stat: S, val: S, tags: I) -> DogstatsdResult
+        where I: IntoIterator<Item=T>,
+              S: Into<Cow<'a, str>>,
+              T: AsRef<str>,
+    {
         match (stat.into(), val.into()) {
             (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(GaugeMetric::new(stat, val), tags),
             (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(GaugeMetric::new(&stat, val), tags),
@@ -283,10 +296,14 @@ impl Client {
     ///   use dogstatsd::{Client, Options};
     ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.histogram("histogram", "67890", &["tag:histogram".into()])
+    ///   client.histogram("histogram", "67890", &["tag:histogram"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn histogram<'a, S: Into<Cow<'a, str>>>(&self, stat: S, val: S, tags: &[&str]) -> DogstatsdResult {
+    pub fn histogram<'a, I, S, T>(&self, stat: S, val: S, tags: I) -> DogstatsdResult
+        where I: IntoIterator<Item=T>,
+              S: Into<Cow<'a, str>>,
+              T: AsRef<str>,
+    {
         match (stat.into(), val.into()) {
             (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(HistogramMetric::new(stat, val), tags),
             (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(HistogramMetric::new(&stat, val), tags),
@@ -303,10 +320,14 @@ impl Client {
     ///   use dogstatsd::{Client, Options};
     ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.set("set", "13579", &["tag:set".into()])
+    ///   client.set("set", "13579", &["tag:set"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn set<'a, S: Into<Cow<'a, str>>>(&self, stat: S, val: S, tags: &[&str]) -> DogstatsdResult {
+    pub fn set<'a, I, S, T>(&self, stat: S, val: S, tags: I) -> DogstatsdResult
+        where I: IntoIterator<Item=T>,
+              S: Into<Cow<'a, str>>,
+              T: AsRef<str>,
+    {
         match (stat.into(), val.into()) {
             (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(SetMetric::new(stat, val), tags),
             (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(SetMetric::new(&stat, val), tags),
@@ -323,10 +344,14 @@ impl Client {
     ///   use dogstatsd::{Client, Options};
     ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.event("Event Title", "Event Body", &["tag:event".into()])
+    ///   client.event("Event Title", "Event Body", &["tag:event"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn event<'a, S: Into<Cow<'a, str>>>(&self, title: S, text: S, tags: &[&str]) -> DogstatsdResult {
+    pub fn event<'a, I, S, T>(&self, title: S, text: S, tags: I) -> DogstatsdResult
+        where I: IntoIterator<Item=T>,
+              S: Into<Cow<'a, str>>,
+              T: AsRef<str>,
+    {
         match (title.into(), text.into()) {
             (Cow::Borrowed(title), Cow::Borrowed(text)) => self.send(Event::new(title, text), tags),
             (Cow::Owned(title), Cow::Borrowed(text)) => self.send(Event::new(&title, text), tags),
@@ -335,7 +360,11 @@ impl Client {
         }
     }
 
-    fn send<M: Metric>(&self, metric: M, tags: &[&str]) -> DogstatsdResult {
+    fn send<I, M, S>(&self, metric: M, tags: I) -> DogstatsdResult
+        where I: IntoIterator<Item=S>,
+              M: Metric,
+              S: AsRef<str>,
+    {
         let formatted_metric = format_for_send(&metric.metric_type_format()[..], &self.namespace[..], tags);
         try!(self.socket.send_to(formatted_metric.as_slice(), &self.to_addr[..]));
         Ok(())
@@ -377,7 +406,7 @@ mod tests {
         let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "");
         let client = Client::new(options).unwrap();
         // Shouldn't panic or error
-        client.send(GaugeMetric::new("gauge".into(), "1234".into()), &["tag1".into(), "tag2".into()]).unwrap();
+        client.send(GaugeMetric::new("gauge".into(), "1234".into()), &["tag1", "tag2"]).unwrap();
     }
 }
 

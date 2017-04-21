@@ -1,21 +1,33 @@
 use chrono::{DateTime, UTC};
 
-pub fn format_for_send(metric: &str, namespace: &str, tags: &[&str]) -> Vec<u8> {
+pub fn format_for_send<I, S>(metric: &str, namespace: &str, tags: I) -> Vec<u8>
+    where I: IntoIterator<Item=S>,
+          S: AsRef<str>,
+{
     let mut buf = Vec::with_capacity(metric.len() + namespace.len());
 
     if !namespace.is_empty() {
         buf.extend_from_slice(namespace.as_bytes());
-        buf.extend_from_slice(b".")
+        buf.extend_from_slice(b".");
     }
 
     buf.extend_from_slice(metric.as_bytes());
 
-    if !tags.is_empty()  {
-        buf.extend_from_slice(b"|#");
+    let mut tags_iter = tags.into_iter();
+    let mut next_tag = tags_iter.next();
 
-        let joined_tags = tags.join(",");
-        buf.reserve(joined_tags.len());
-        buf.extend_from_slice(&joined_tags.as_bytes());
+    if next_tag.is_some() {
+        buf.extend_from_slice(b"|#");
+    }
+
+    while next_tag.is_some() {
+        buf.extend_from_slice(next_tag.unwrap().as_ref().as_bytes());
+
+        next_tag = tags_iter.next();
+
+        if next_tag.is_some() {
+            buf.extend_from_slice(b",");
+        }
     }
 
     buf
@@ -35,13 +47,13 @@ impl<'a> Metric for CountMetric<'a> {
     // my_count:-1|c
     fn metric_type_format(&self) -> String {
         match *self {
-            CountMetric::Incr(ref stat) => {
+            CountMetric::Incr(stat) => {
                 let mut buf = String::with_capacity(3 + stat.len() + 4);
                 buf.push_str(stat);
                 buf.push_str(":1|c");
                 buf
             },
-            CountMetric::Decr(ref stat) => {
+            CountMetric::Decr(stat) => {
                 let mut buf = String::with_capacity(3 + stat.len() + 4);
                 buf.push_str(stat);
                 buf.push_str(":-1|c");
@@ -225,7 +237,7 @@ mod tests {
     fn test_format_for_send_no_tags() {
         assert_eq!(
             &b"namespace.metric:val|v"[..],
-            &format_for_send("metric:val|v", "namespace", &[])[..]
+            &format_for_send("metric:val|v", "namespace", &[] as &[String])[..]
         )
     }
 
@@ -233,7 +245,7 @@ mod tests {
     fn test_format_for_send_no_namespace() {
         assert_eq!(
             &b"metric:val|v|#tag:1,tag:2"[..],
-            &format_for_send("metric:val|v", "", &["tag:1".into(), "tag:2".into()])[..]
+            &format_for_send("metric:val|v", "", &["tag:1", "tag:2"])[..]
         )
     }
 
@@ -241,7 +253,7 @@ mod tests {
     fn test_format_for_send_everything() {
         assert_eq!(
             &b"namespace.metric:val|v|#tag:1,tag:2"[..],
-            &format_for_send("metric:val|v", "namespace", &["tag:1".into(), "tag:2".into()])[..]
+            &format_for_send("metric:val|v", "namespace", &["tag:1", "tag:2"])[..]
         )
     }
 
