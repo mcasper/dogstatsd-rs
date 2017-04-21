@@ -1,4 +1,4 @@
-//! A Rust client for interacting with Dogstatsd
+  //! A Rust client for interacting with Dogstatsd
 //!
 //! Dogstatsd is a custom `StatsD` implementation by `DataDog` for sending metrics and events to their
 //! system. Through this client you can report any type of metric you want, tag it, and enjoy your
@@ -31,33 +31,33 @@
 //! let client = Client::new(Options::default()).unwrap();
 //!
 //! // Increment a counter
-//! client.incr("my_counter", vec![]).unwrap();
+//! client.incr("my_counter", &[]).unwrap();
 //!
 //! // Decrement a counter
-//! client.decr("my_counter", vec![]).unwrap();
+//! client.decr("my_counter", &[]).unwrap();
 //!
 //! // Time a block of code (reports in ms)
-//! client.time("my_time", vec![], || {
+//! client.time("my_time", &[], || {
 //!     // Some time consuming code
 //! }).unwrap();
 //!
 //! // Report your own timing in ms
-//! client.timing("my_timing", 500, vec![]).unwrap();
+//! client.timing("my_timing", 500, &[]).unwrap();
 //!
 //! // Report an arbitrary value (a gauge)
-//! client.gauge("my_gauge", "12345", vec![]).unwrap();
+//! client.gauge("my_gauge", "12345", &[]).unwrap();
 //!
 //! // Report a sample of a histogram
-//! client.histogram("my_histogram", "67890", vec![]).unwrap();
+//! client.histogram("my_histogram", "67890", &[]).unwrap();
 //!
 //! // Report a member of a set
-//! client.set("my_set", "13579", vec![]).unwrap();
+//! client.set("my_set", "13579", &[]).unwrap();
 //!
 //! // Send a custom event
-//! client.event("My Custom Event Title", "My Custom Event Body", vec![]).unwrap();
+//! client.event("My Custom Event Title", "My Custom Event Body", &[]).unwrap();
 //!
 //! // Add tags to any metric by passing a Vec<String> of tags to apply
-//! client.gauge("my_gauge", "12345", vec!["tag:1".into(), "tag:2".into()]).unwrap();
+//! client.gauge("my_gauge", "12345", &["tag:1".into(), "tag:2".into()]).unwrap();
 //! ```
 
 #![cfg_attr(feature = "unstable", feature(test))]
@@ -66,6 +66,7 @@ extern crate chrono;
 
 use chrono::UTC;
 use std::net::UdpSocket;
+use std::borrow::Cow;
 
 mod error;
 use self::error::DogstatsdError;
@@ -178,11 +179,15 @@ impl Client {
     ///
     ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.incr("counter", vec!["tag:counter".into()])
+    ///   client.incr("counter", &["tag:counter".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn incr<S: Into<String>>(&self, stat: S, tags: Vec<String>) -> DogstatsdResult {
-        self.send(CountMetric::Incr(stat.into()), tags)
+    pub fn incr<'a, S: Into<Cow<'a, str>>>(&self, stat: S, tags: &[&str]) -> DogstatsdResult {
+        match stat.into() {
+            Cow::Borrowed(stat) => self.send(CountMetric::Incr(stat), tags),
+            Cow::Owned(stat) => self.send(CountMetric::Incr(&stat), tags)
+        }
+
     }
 
     /// Decrement a StatsD counter
@@ -194,11 +199,15 @@ impl Client {
     ///
     ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.decr("counter", vec!["tag:counter".into()])
+    ///   client.decr("counter", &["tag:counter".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn decr<S: Into<String>>(&self, stat: S, tags: Vec<String>) -> DogstatsdResult {
-        self.send(CountMetric::Decr(stat.into()), tags)
+    pub fn decr<'a, S: Into<Cow<'a, str>>>(&self, stat: S, tags: &[&str]) -> DogstatsdResult {
+        match stat.into() {
+            Cow::Borrowed(stat) => self.send(CountMetric::Decr(stat), tags),
+            Cow::Owned(stat) => self.send(CountMetric::Decr(&stat), tags)
+        }
+
     }
 
     /// Time how long it takes for a block of code to execute.
@@ -212,16 +221,19 @@ impl Client {
     ///
     ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.time("timer", vec!["tag:time".into()], || {
+    ///   client.time("timer", &["tag:time".into()], || {
     ///       thread::sleep(Duration::from_millis(200))
     ///   }).unwrap_or_else(|e| println!("Encountered error: {}", e))
     /// ```
-    pub fn time<S: Into<String>, F: FnOnce()>(&self, stat: S, tags: Vec<String>, block: F) -> DogstatsdResult {
+    pub fn time<'a, S: Into<Cow<'a, str>>, F: FnOnce()>(&self, stat: S, tags: &[&str], block: F) -> DogstatsdResult {
         let start_time = UTC::now();
         block();
         let end_time = UTC::now();
 
-        self.send(TimeMetric::new(stat.into(), start_time, end_time), tags)
+        match stat.into() {
+            Cow::Borrowed(stat) => self.send(TimeMetric::new(stat, &start_time, &end_time), tags),
+            Cow::Owned(stat) => self.send(TimeMetric::new(&stat, &start_time, &end_time), tags)
+        }
     }
 
     /// Send your own timing metric in milliseconds
@@ -233,11 +245,14 @@ impl Client {
     ///
     ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.timing("timing", 350, vec!["tag:timing".into()])
+    ///   client.timing("timing", 350, &["tag:timing".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn timing<S: Into<String>>(&self, stat: S, ms: i64, tags: Vec<String>) -> DogstatsdResult {
-        self.send(TimingMetric::new(stat.into(), ms), tags)
+    pub fn timing<'a, S: Into<Cow<'a, str>>>(&self, stat: S, ms: i64, tags: &[&str]) -> DogstatsdResult {
+        match stat.into() {
+            Cow::Borrowed(stat) => self.send(TimingMetric::new(stat, ms), tags),
+            Cow::Owned(stat) => self.send(TimingMetric::new(&stat, ms), tags)
+        }
     }
 
     /// Report an arbitrary value as a gauge
@@ -248,11 +263,16 @@ impl Client {
     ///   use dogstatsd::{Client, Options};
     ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.gauge("gauge", "12345", vec!["tag:gauge".into()])
+    ///   client.gauge("gauge", "12345", &["tag:gauge".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn gauge<S: Into<String>>(&self, stat: S, val: S, tags: Vec<String>) -> DogstatsdResult {
-        self.send(GaugeMetric::new(stat.into(), val.into()), tags)
+    pub fn gauge<'a, S: Into<Cow<'a, str>>>(&self, stat: S, val: S, tags: &[&str]) -> DogstatsdResult {
+        match (stat.into(), val.into()) {
+            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(GaugeMetric::new(stat, val), tags),
+            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(GaugeMetric::new(&stat, val), tags),
+            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(GaugeMetric::new(stat, &val), tags),
+            (Cow::Owned(stat), Cow::Owned(val)) => self.send(GaugeMetric::new(&stat, &val), tags)
+        }
     }
 
     /// Report a value in a histogram
@@ -263,11 +283,16 @@ impl Client {
     ///   use dogstatsd::{Client, Options};
     ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.histogram("histogram", "67890", vec!["tag:histogram".into()])
+    ///   client.histogram("histogram", "67890", &["tag:histogram".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn histogram<S: Into<String>>(&self, stat: S, val: S, tags: Vec<String>) -> DogstatsdResult {
-        self.send(HistogramMetric::new(stat.into(), val.into()), tags)
+    pub fn histogram<'a, S: Into<Cow<'a, str>>>(&self, stat: S, val: S, tags: &[&str]) -> DogstatsdResult {
+        match (stat.into(), val.into()) {
+            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(HistogramMetric::new(stat, val), tags),
+            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(HistogramMetric::new(&stat, val), tags),
+            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(HistogramMetric::new(stat, &val), tags),
+            (Cow::Owned(stat), Cow::Owned(val)) => self.send(HistogramMetric::new(&stat, &val), tags)
+        }
     }
 
     /// Report a value in a set
@@ -278,11 +303,16 @@ impl Client {
     ///   use dogstatsd::{Client, Options};
     ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.set("set", "13579", vec!["tag:set".into()])
+    ///   client.set("set", "13579", &["tag:set".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn set<S: Into<String>>(&self, stat: S, val: S, tags: Vec<String>) -> DogstatsdResult {
-        self.send(SetMetric::new(stat.into(), val.into()), tags)
+    pub fn set<'a, S: Into<Cow<'a, str>>>(&self, stat: S, val: S, tags: &[&str]) -> DogstatsdResult {
+        match (stat.into(), val.into()) {
+            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(SetMetric::new(stat, val), tags),
+            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(SetMetric::new(&stat, val), tags),
+            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(SetMetric::new(stat, &val), tags),
+            (Cow::Owned(stat), Cow::Owned(val)) => self.send(SetMetric::new(&stat, &val), tags)
+        }
     }
 
     /// Send a custom event as a title and a body
@@ -293,16 +323,21 @@ impl Client {
     ///   use dogstatsd::{Client, Options};
     ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.event("Event Title", "Event Body", vec!["tag:event".into()])
+    ///   client.event("Event Title", "Event Body", &["tag:event".into()])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn event<S: Into<String>>(&self, title: S, text: S, tags: Vec<String>) -> DogstatsdResult {
-        self.send(Event::new(title.into(), text.into()), tags)
+    pub fn event<'a, S: Into<Cow<'a, str>>>(&self, title: S, text: S, tags: &[&str]) -> DogstatsdResult {
+        match (title.into(), text.into()) {
+            (Cow::Borrowed(title), Cow::Borrowed(text)) => self.send(Event::new(title, text), tags),
+            (Cow::Owned(title), Cow::Borrowed(text)) => self.send(Event::new(&title, text), tags),
+            (Cow::Borrowed(title), Cow::Owned(text)) => self.send(Event::new(title, &text), tags),
+            (Cow::Owned(title), Cow::Owned(text)) => self.send(Event::new(&title, &text), tags)
+        }
     }
 
-    fn send<M: Metric>(&self, metric: M, tags: Vec<String>) -> DogstatsdResult {
-        let formatted_metric = format_for_send(metric.metric_type_format(), &self.namespace[..], tags.as_slice());
-        try!(self.socket.send_to(formatted_metric.as_bytes(), &self.to_addr[..]));
+    fn send<M: Metric>(&self, metric: M, tags: &[&str]) -> DogstatsdResult {
+        let formatted_metric = format_for_send(&metric.metric_type_format()[..], &self.namespace[..], tags);
+        try!(self.socket.send_to(formatted_metric.as_slice(), &self.to_addr[..]));
         Ok(())
     }
 }
@@ -342,7 +377,7 @@ mod tests {
         let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "");
         let client = Client::new(options).unwrap();
         // Shouldn't panic or error
-        client.send(GaugeMetric::new("gauge".into(), "1234".into()), vec!["tag1".into(), "tag2".into()]).unwrap();
+        client.send(GaugeMetric::new("gauge".into(), "1234".into()), &["tag1".into(), "tag2".into()]).unwrap();
     }
 }
 
@@ -356,9 +391,9 @@ mod bench {
     fn bench_incr(b: &mut Bencher) {
         let options = Options::default();
         let client = Client::new(options).unwrap();
-        let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
+        let tags = &["name1:value1"];
         b.iter(|| {
-            client.incr("bench.incr", tags.clone()).unwrap();
+            client.incr("bench.incr", tags).unwrap();
         })
     }
 
@@ -366,9 +401,9 @@ mod bench {
     fn bench_decr(b: &mut Bencher) {
         let options = Options::default();
         let client = Client::new(options).unwrap();
-        let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
+        let tags = &["name1:value1"];
         b.iter(|| {
-            client.decr("bench.decr", tags.clone()).unwrap();
+            client.decr("bench.decr", tags).unwrap();
         })
     }
 
@@ -376,10 +411,10 @@ mod bench {
     fn bench_timing(b: &mut Bencher) {
         let options = Options::default();
         let client = Client::new(options).unwrap();
-        let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
+        let tags = &["name1:value1"];
         let mut i = 0;
         b.iter(|| {
-            client.timing("bench.timing", i, tags.clone()).unwrap();
+            client.timing("bench.timing", i, tags).unwrap();
             i += 1;
         })
     }
@@ -388,10 +423,10 @@ mod bench {
     fn bench_gauge(b: &mut Bencher) {
         let options = Options::default();
         let client = Client::new(options).unwrap();
-        let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
+        let tags = vec!["name1:value1"];
         let mut i = 0;
         b.iter(|| {
-            client.gauge("bench.timing", &i.to_string(), tags.clone()).unwrap();
+            client.gauge("bench.timing", &i.to_string(), &tags).unwrap();
             i += 1;
         })
     }
@@ -400,10 +435,10 @@ mod bench {
     fn bench_histogram(b: &mut Bencher) {
         let options = Options::default();
         let client = Client::new(options).unwrap();
-        let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
+        let tags = vec!["name1:value1"];
         let mut i = 0;
         b.iter(|| {
-            client.histogram("bench.timing", &i.to_string(), tags.clone()).unwrap();
+            client.histogram("bench.timing", &i.to_string(), &tags).unwrap();
             i += 1;
         })
     }
@@ -412,10 +447,10 @@ mod bench {
     fn bench_set(b: &mut Bencher) {
         let options = Options::default();
         let client = Client::new(options).unwrap();
-        let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
+        let tags = vec!["name1:value1"];
         let mut i = 0;
         b.iter(|| {
-            client.set("bench.timing", &i.to_string(), tags.clone()).unwrap();
+            client.set("bench.timing", &i.to_string(), &tags).unwrap();
             i += 1;
         })
     }
@@ -424,9 +459,9 @@ mod bench {
     fn bench_event(b: &mut Bencher) {
         let options = Options::default();
         let client = Client::new(options).unwrap();
-        let tags = vec!["name1:value1".to_string(), "name2:value2".to_string()];
+        let tags = vec!["name1:value1"];
         b.iter(|| {
-            client.event("Test Event Title", "Test Event Message", tags.clone()).unwrap();
+            client.event("Test Event Title", "Test Event Message", &tags).unwrap();
         })
     }
 }
