@@ -458,7 +458,7 @@ mod bench {
         let tags = vec!["name1:value1"];
         let mut i = 0;
         b.iter(|| {
-            client.gauge("bench.timing", &i.to_string(), &tags).unwrap();
+            client.gauge("bench.guage", &i.to_string(), &tags).unwrap();
             i += 1;
         })
     }
@@ -470,7 +470,7 @@ mod bench {
         let tags = vec!["name1:value1"];
         let mut i = 0;
         b.iter(|| {
-            client.histogram("bench.timing", &i.to_string(), &tags).unwrap();
+            client.histogram("bench.histogramc", &i.to_string(), &tags).unwrap();
             i += 1;
         })
     }
@@ -482,7 +482,7 @@ mod bench {
         let tags = vec!["name1:value1"];
         let mut i = 0;
         b.iter(|| {
-            client.set("bench.timing", &i.to_string(), &tags).unwrap();
+            client.set("bench.set", &i.to_string(), &tags).unwrap();
             i += 1;
         })
     }
