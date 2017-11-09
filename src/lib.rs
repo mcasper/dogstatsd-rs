@@ -62,7 +62,7 @@
 #![deny(warnings, missing_debug_implementations, missing_copy_implementations, missing_docs)]
 extern crate chrono;
 
-use chrono::UTC;
+use chrono::Utc;
 use std::net::UdpSocket;
 use std::borrow::Cow;
 
@@ -235,9 +235,9 @@ impl Client {
               S: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        let start_time = UTC::now();
+        let start_time = Utc::now();
         block();
-        let end_time = UTC::now();
+        let end_time = Utc::now();
 
         match stat.into() {
             Cow::Borrowed(stat) => self.send(&TimeMetric::new(stat, &start_time, &end_time), tags),

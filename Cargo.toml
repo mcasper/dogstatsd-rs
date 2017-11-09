@@ -9,7 +9,7 @@ repository = "https://github.com/mcasper/dogstatsd-rs"
 keywords = ["datadog", "dogstatsd", "client"]
 
 [dependencies]
-chrono = "0.2"
+chrono = "0.4"
 
 [features]
 unstable = []

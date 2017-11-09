@@ -1,4 +1,4 @@
-use chrono::{DateTime, UTC};
+use chrono::{DateTime, Utc};
 
 pub fn format_for_send<I, S>(metric: &str, namespace: &str, tags: I) -> Vec<u8>
     where I: IntoIterator<Item=S>,
@@ -64,15 +64,15 @@ impl<'a> Metric for CountMetric<'a> {
 }
 
 pub struct TimeMetric<'a> {
-    start_time: &'a DateTime<UTC>,
-    end_time: &'a DateTime<UTC>,
+    start_time: &'a DateTime<Utc>,
+    end_time: &'a DateTime<Utc>,
     stat: &'a str,
 }
 
 impl<'a> Metric for TimeMetric<'a> {
     // my_stat:500|ms
     fn metric_type_format(&self) -> String {
-        let dur = *self.end_time - *self.start_time;
+        let dur = self.end_time.signed_duration_since(*self.start_time);
         let mut buf = String::with_capacity(3 + self.stat.len() + 11);
         buf.push_str(self.stat);
         buf.push_str(":");
@@ -83,7 +83,7 @@ impl<'a> Metric for TimeMetric<'a> {
 }
 
 impl<'a> TimeMetric<'a> {
-    pub fn new(stat: &'a str, start_time: &'a DateTime<UTC>, end_time: &'a DateTime<UTC>) -> Self {
+    pub fn new(stat: &'a str, start_time: &'a DateTime<Utc>, end_time: &'a DateTime<Utc>) -> Self {
         TimeMetric {
             start_time: start_time,
             end_time: end_time,
@@ -230,7 +230,7 @@ impl<'a> Event<'a> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{TimeZone, UTC};
+    use chrono::{TimeZone, Utc};
     use super::*;
 
     #[test]
@@ -273,8 +273,8 @@ mod tests {
 
     #[test]
     fn test_time_metric() {
-        let start_time = UTC.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 0);
-        let end_time = UTC.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 900);
+        let start_time = Utc.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 0);
+        let end_time = Utc.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 900);
         let metric = TimeMetric::new("time".into(), &start_time, &end_time);
 
         assert_eq!("time:900|ms", metric.metric_type_format())
