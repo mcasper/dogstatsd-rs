@@ -188,8 +188,8 @@ impl Client {
               T: AsRef<str>,
     {
         match stat.into() {
-            Cow::Borrowed(stat) => self.send(CountMetric::Incr(stat), tags),
-            Cow::Owned(stat) => self.send(CountMetric::Incr(&stat), tags)
+            Cow::Borrowed(stat) => self.send(&CountMetric::Incr(stat), tags),
+            Cow::Owned(stat) => self.send(&CountMetric::Incr(&stat), tags)
         }
     }
 
@@ -210,8 +210,8 @@ impl Client {
               T: AsRef<str>,
     {
         match stat.into() {
-            Cow::Borrowed(stat) => self.send(CountMetric::Decr(stat), tags),
-            Cow::Owned(stat) => self.send(CountMetric::Decr(&stat), tags)
+            Cow::Borrowed(stat) => self.send(&CountMetric::Decr(stat), tags),
+            Cow::Owned(stat) => self.send(&CountMetric::Decr(&stat), tags)
         }
     }
 
@@ -240,8 +240,8 @@ impl Client {
         let end_time = UTC::now();
 
         match stat.into() {
-            Cow::Borrowed(stat) => self.send(TimeMetric::new(stat, &start_time, &end_time), tags),
-            Cow::Owned(stat) => self.send(TimeMetric::new(&stat, &start_time, &end_time), tags)
+            Cow::Borrowed(stat) => self.send(&TimeMetric::new(stat, &start_time, &end_time), tags),
+            Cow::Owned(stat) => self.send(&TimeMetric::new(&stat, &start_time, &end_time), tags)
         }
     }
 
@@ -262,8 +262,8 @@ impl Client {
               T: AsRef<str>,
     {
         match stat.into() {
-            Cow::Borrowed(stat) => self.send(TimingMetric::new(stat, ms), tags),
-            Cow::Owned(stat) => self.send(TimingMetric::new(&stat, ms), tags)
+            Cow::Borrowed(stat) => self.send(&TimingMetric::new(stat, ms), tags),
+            Cow::Owned(stat) => self.send(&TimingMetric::new(&stat, ms), tags)
         }
     }
 
@@ -284,10 +284,10 @@ impl Client {
               T: AsRef<str>,
     {
         match (stat.into(), val.into()) {
-            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(GaugeMetric::new(stat, val), tags),
-            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(GaugeMetric::new(&stat, val), tags),
-            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(GaugeMetric::new(stat, &val), tags),
-            (Cow::Owned(stat), Cow::Owned(val)) => self.send(GaugeMetric::new(&stat, &val), tags)
+            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(&GaugeMetric::new(stat, val), tags),
+            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(&GaugeMetric::new(&stat, val), tags),
+            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(&GaugeMetric::new(stat, &val), tags),
+            (Cow::Owned(stat), Cow::Owned(val)) => self.send(&GaugeMetric::new(&stat, &val), tags)
         }
     }
 
@@ -308,10 +308,10 @@ impl Client {
               T: AsRef<str>,
     {
         match (stat.into(), val.into()) {
-            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(HistogramMetric::new(stat, val), tags),
-            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(HistogramMetric::new(&stat, val), tags),
-            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(HistogramMetric::new(stat, &val), tags),
-            (Cow::Owned(stat), Cow::Owned(val)) => self.send(HistogramMetric::new(&stat, &val), tags)
+            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(&HistogramMetric::new(stat, val), tags),
+            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(&HistogramMetric::new(&stat, val), tags),
+            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(&HistogramMetric::new(stat, &val), tags),
+            (Cow::Owned(stat), Cow::Owned(val)) => self.send(&HistogramMetric::new(&stat, &val), tags)
         }
     }
 
@@ -332,10 +332,10 @@ impl Client {
               T: AsRef<str>,
     {
         match (stat.into(), val.into()) {
-            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(SetMetric::new(stat, val), tags),
-            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(SetMetric::new(&stat, val), tags),
-            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(SetMetric::new(stat, &val), tags),
-            (Cow::Owned(stat), Cow::Owned(val)) => self.send(SetMetric::new(&stat, &val), tags)
+            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(&SetMetric::new(stat, val), tags),
+            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(&SetMetric::new(&stat, val), tags),
+            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(&SetMetric::new(stat, &val), tags),
+            (Cow::Owned(stat), Cow::Owned(val)) => self.send(&SetMetric::new(&stat, &val), tags)
         }
     }
 
@@ -356,14 +356,14 @@ impl Client {
               T: AsRef<str>,
     {
         match (title.into(), text.into()) {
-            (Cow::Borrowed(title), Cow::Borrowed(text)) => self.send(Event::new(title, text), tags),
-            (Cow::Owned(title), Cow::Borrowed(text)) => self.send(Event::new(&title, text), tags),
-            (Cow::Borrowed(title), Cow::Owned(text)) => self.send(Event::new(title, &text), tags),
-            (Cow::Owned(title), Cow::Owned(text)) => self.send(Event::new(&title, &text), tags)
+            (Cow::Borrowed(title), Cow::Borrowed(text)) => self.send(&Event::new(title, text), tags),
+            (Cow::Owned(title), Cow::Borrowed(text)) => self.send(&Event::new(&title, text), tags),
+            (Cow::Borrowed(title), Cow::Owned(text)) => self.send(&Event::new(title, &text), tags),
+            (Cow::Owned(title), Cow::Owned(text)) => self.send(&Event::new(&title, &text), tags)
         }
     }
 
-    fn send<I, M, S>(&self, metric: M, tags: I) -> DogstatsdResult
+    fn send<I, M, S>(&self, metric: &M, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=S>,
               M: Metric,
               S: AsRef<str>,
@@ -409,7 +409,7 @@ mod tests {
         let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "");
         let client = Client::new(options).unwrap();
         // Shouldn't panic or error
-        client.send(GaugeMetric::new("gauge".into(), "1234".into()), &["tag1", "tag2"]).unwrap();
+        client.send(&GaugeMetric::new("gauge".into(), "1234".into()), &["tag1", "tag2"]).unwrap();
     }
 }
 
