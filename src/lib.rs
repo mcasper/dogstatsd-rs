@@ -86,7 +86,7 @@ pub struct Options {
     pub namespace: String,
 }
 
-impl Options {
+impl Default for Options {
     /// Create a new options struct with all the default settings.
     ///
     /// # Examples
@@ -105,7 +105,7 @@ impl Options {
     ///       options
     ///   )
     /// ```
-    pub fn default() -> Self {
+    fn default() -> Self {
         Options {
             from_addr: "127.0.0.1:0".into(),
             to_addr: "127.0.0.1:8125".into(),
@@ -113,6 +113,9 @@ impl Options {
         }
     }
 
+}
+
+impl Options {
     /// Create a new options struct by supplying values for all fields.
     ///
     /// # Examples
@@ -161,7 +164,7 @@ impl Client {
     /// ```
     pub fn new(options: Options) -> Result<Self, DogstatsdError> {
         Ok(Client {
-            socket: try!(UdpSocket::bind(&options.from_addr[..])),
+            socket: UdpSocket::bind(&options.from_addr[..])?,
             from_addr: options.from_addr,
             to_addr: options.to_addr,
             namespace: options.namespace,
@@ -366,7 +369,7 @@ impl Client {
               S: AsRef<str>,
     {
         let formatted_metric = format_for_send(&metric.metric_type_format()[..], &self.namespace[..], tags);
-        try!(self.socket.send_to(formatted_metric.as_slice(), &self.to_addr[..]));
+        self.socket.send_to(formatted_metric.as_slice(), &self.to_addr[..])?;
         Ok(())
     }
 }
