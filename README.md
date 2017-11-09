@@ -30,7 +30,7 @@ let custom_client = Client::new(custom_options);
 
 Start sending metrics:
 ```rust
-use dogstatsd::{Client, Options};
+use dogstatsd::{Client, Options, ServiceStatus, ServiceCheckOptions};
 
 let client = Client::new(Options::default());
 
@@ -56,6 +56,13 @@ client.histogram("my_histogram", "67890", vec![]).unwrap();
 
 // Report a member of a set
 client.set("my_set", "13579", vec![]).unwrap();
+
+// Report a service check
+let service_check_options = ServiceCheckOptions {
+  hostname: Some("my-host.localhost"),
+  ..Default::default()
+};
+client.service_check("redis.can_connect", ServiceStatus::OK, vec![], service_check_options).unwrap();
 
 // Send a custom event
 client.event("My Custom Event Title", "My Custom Event Body", vec![]).unwrap();

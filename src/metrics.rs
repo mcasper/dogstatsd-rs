@@ -197,6 +197,105 @@ impl<'a> SetMetric<'a> {
     }
 }
 
+/// Represents the different states a service can be in
+#[derive(Clone, Copy, Debug)]
+pub enum ServiceStatus {
+    /// OK State
+    OK,
+    /// Warning State
+    Warning,
+    /// Critical State
+    Critical,
+    /// Unknown State
+    Unknown,
+}
+
+impl ServiceStatus {
+    fn to_int(&self) -> i32 {
+        match *self {
+            ServiceStatus::OK => 0,
+            ServiceStatus::Warning => 1,
+            ServiceStatus::Critical => 2,
+            ServiceStatus::Unknown => 3,
+        }
+    }
+}
+
+/// Struct for adding optional pieces to a service check
+#[derive(Clone, Copy, Debug)]
+pub struct ServiceCheckOptions {
+    /// An optional timestamp to include with the check
+    pub timestamp: Option<i32>,
+    /// An optional hostname to include with the check
+    pub hostname: Option<&'static str>,
+    /// An optional message to include with the check
+    pub message: Option<&'static str>,
+}
+
+impl Default for ServiceCheckOptions {
+    fn default() -> Self {
+        ServiceCheckOptions {
+            timestamp: None,
+            hostname: None,
+            message: None,
+        }
+    }
+}
+
+impl ServiceCheckOptions {
+    fn len(&self) -> usize {
+        let mut length = 0;
+        length += self.timestamp.map_or(0, |ts| format!("{}", ts).len() + 3);
+        length += self.hostname.map_or(0, |host| host.len() + 3);
+        length += self.message.map_or(0, |msg| msg.len() + 3);
+        length
+    }
+}
+
+pub struct ServiceCheck<'a> {
+    stat: &'a str,
+    val: ServiceStatus,
+    options: ServiceCheckOptions,
+}
+
+impl<'a> Metric for ServiceCheck<'a> {
+    // _sc|my_service.can_connect|1
+    fn metric_type_format(&self) -> String {
+        let mut buf = String::with_capacity(6 + self.stat.len() + self.options.len());
+        buf.push_str("_sc|");
+        buf.push_str(self.stat);
+        buf.push_str("|");
+        buf.push_str(&format!("{}", self.val.to_int()));
+
+        if self.options.timestamp.is_some() {
+            buf.push_str("|d:");
+            buf.push_str(&format!("{}", self.options.timestamp.unwrap()));
+        }
+
+        if self.options.hostname.is_some() {
+            buf.push_str("|h:");
+            buf.push_str(self.options.hostname.unwrap());
+        }
+
+        if self.options.message.is_some() {
+            buf.push_str("|m:");
+            buf.push_str(self.options.message.unwrap());
+        }
+
+        buf
+    }
+}
+
+impl<'a> ServiceCheck<'a> {
+    pub fn new(stat: &'a str, val: ServiceStatus, options: ServiceCheckOptions) -> Self {
+        ServiceCheck {
+            stat: stat,
+            val: val,
+            options: options,
+        }
+    }
+}
+
 pub struct Event<'a> {
     title: &'a str,
     text: &'a str,
@@ -309,11 +408,68 @@ mod tests {
     }
 
     #[test]
+    fn test_service_check() {
+        let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, ServiceCheckOptions::default());
+
+        assert_eq!("_sc|redis.can_connect|1", metric.metric_type_format())
+    }
+
+    #[test]
+    fn test_service_check_with_timestamp() {
+        let options = ServiceCheckOptions {
+            timestamp: Some(1234567890),
+            ..Default::default()
+        };
+        let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, options);
+
+        assert_eq!("_sc|redis.can_connect|1|d:1234567890", metric.metric_type_format())
+    }
+
+    #[test]
+    fn test_service_check_with_hostname() {
+        let options = ServiceCheckOptions {
+            hostname: Some("my_server.localhost"),
+            ..Default::default()
+        };
+        let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, options);
+
+        assert_eq!("_sc|redis.can_connect|1|h:my_server.localhost", metric.metric_type_format())
+    }
+
+    #[test]
+    fn test_service_check_with_message() {
+        let options = ServiceCheckOptions {
+            message: Some("Service is possibly down"),
+            ..Default::default()
+        };
+        let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, options);
+
+        assert_eq!("_sc|redis.can_connect|1|m:Service is possibly down", metric.metric_type_format())
+    }
+
+    #[test]
+    fn test_service_check_with_all() {
+        let options = ServiceCheckOptions {
+            timestamp: Some(1234567890),
+            hostname: Some("my_server.localhost"),
+            message: Some("Service is possibly down")
+        };
+        let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, options);
+
+        assert_eq!(
+            "_sc|redis.can_connect|1|d:1234567890|h:my_server.localhost|m:Service is possibly down",
+            metric.metric_type_format()
+        )
+    }
+
+    #[test]
     fn test_event() {
         let metric = Event::new("Event Title".into(), "Event Body - Something Happened".into());
 
-        assert_eq!("_e{11,31}:Event Title|Event Body - Something Happened",
-                   metric.metric_type_format())
+        assert_eq!(
+            "_e{11,31}:Event Title|Event Body - Something Happened",
+            metric.metric_type_format()
+        )
     }
 }
 

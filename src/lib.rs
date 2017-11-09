@@ -72,6 +72,8 @@ use self::error::DogstatsdError;
 mod metrics;
 use self::metrics::*;
 
+pub use self::metrics::{ServiceStatus, ServiceCheckOptions};
+
 /// A type alias for returning a unit type or an error
 pub type DogstatsdResult = Result<(), DogstatsdError>;
 
@@ -339,6 +341,44 @@ impl Client {
         }
     }
 
+    /// Report the status of a service
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///   use dogstatsd::{Client, Options, ServiceStatus, ServiceCheckOptions};
+    ///
+    ///   let client = Client::new(Options::default()).unwrap();
+    ///   client.service_check("redis.can_connect", ServiceStatus::OK, &["tag:service"], None)
+    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///
+    ///   let options = ServiceCheckOptions {
+    ///     hostname: Some("my-host.localhost"),
+    ///     ..Default::default()
+    ///   };
+    ///   client.service_check("redis.can_connect", ServiceStatus::OK, &["tag:service"], Some(options))
+    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///
+    ///   let all_options = ServiceCheckOptions {
+    ///     hostname: Some("my-host.localhost"),
+    ///     timestamp: Some(1510326433),
+    ///     message: Some("Message about the check or service")
+    ///   };
+    ///   client.service_check("redis.can_connect", ServiceStatus::OK, &["tag:service"], Some(all_options))
+    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    /// ```
+    pub fn service_check<'a, I, S, T>(&self, stat: S, val: ServiceStatus, tags: I, options: Option<ServiceCheckOptions>) -> DogstatsdResult
+        where I: IntoIterator<Item=T>,
+              S: Into<Cow<'a, str>>,
+              T: AsRef<str>,
+    {
+        let unwrapped_options = options.unwrap_or(ServiceCheckOptions::default());
+        match stat.into() {
+            Cow::Borrowed(stat) => self.send(&ServiceCheck::new(stat, val, unwrapped_options), tags),
+            Cow::Owned(stat) => self.send(&ServiceCheck::new(&stat, val, unwrapped_options), tags),
+        }
+    }
+
     /// Send a custom event as a title and a body
     ///
     /// # Examples
@@ -470,7 +510,7 @@ mod bench {
         let tags = vec!["name1:value1"];
         let mut i = 0;
         b.iter(|| {
-            client.histogram("bench.histogramc", &i.to_string(), &tags).unwrap();
+            client.histogram("bench.histogram", &i.to_string(), &tags).unwrap();
             i += 1;
         })
     }
@@ -484,6 +524,16 @@ mod bench {
         b.iter(|| {
             client.set("bench.set", &i.to_string(), &tags).unwrap();
             i += 1;
+        })
+    }
+
+    #[bench]
+    fn bench_service_check(b: &mut Bencher) {
+        let options = Options::default();
+        let client = Client::new(options).unwrap();
+        let tags = vec!["name1:value1"];
+        b.iter(|| {
+            client.service_check("bench.service_check", ServiceStatus::Critical, &tags).unwrap();
         })
     }
 
