@@ -166,7 +166,7 @@ impl Client {
     /// ```
     pub fn new(options: Options) -> Result<Self, DogstatsdError> {
         Ok(Client {
-            socket: UdpSocket::bind(&options.from_addr[..])?,
+            socket: UdpSocket::bind(&options.from_addr)?,
             from_addr: options.from_addr,
             to_addr: options.to_addr,
             namespace: options.namespace,
@@ -408,8 +408,8 @@ impl Client {
               M: Metric,
               S: AsRef<str>,
     {
-        let formatted_metric = format_for_send(&metric.metric_type_format()[..], &self.namespace[..], tags);
-        self.socket.send_to(formatted_metric.as_slice(), &self.to_addr[..])?;
+        let formatted_metric = format_for_send(&metric.metric_type_format(), &self.namespace, tags);
+        self.socket.send_to(formatted_metric.as_slice(), &self.to_addr)?;
         Ok(())
     }
 }
