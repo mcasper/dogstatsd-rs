@@ -44,7 +44,7 @@ pub trait Metric {
     fn metric_type_format(&self) -> String;
 
     fn uses_namespace(&self) -> bool {
-        return true;
+        true
     }
 }
 
@@ -271,7 +271,7 @@ pub struct ServiceCheck<'a> {
 
 impl<'a> Metric for ServiceCheck<'a> {
     fn uses_namespace(&self) -> bool {
-        return false;
+        false
     }
 
     // _sc|my_service.can_connect|1
@@ -318,7 +318,7 @@ pub struct Event<'a> {
 
 impl<'a> Metric for Event<'a> {
     fn uses_namespace(&self) -> bool {
-        return false;
+        false
     }
 
     fn metric_type_format(&self) -> String {
