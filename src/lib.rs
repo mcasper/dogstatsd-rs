@@ -408,7 +408,7 @@ impl Client {
               M: Metric,
               S: AsRef<str>,
     {
-        let formatted_metric = format_for_send(&metric.metric_type_format(), &self.namespace, tags);
+        let formatted_metric = format_for_send(metric, &self.namespace, tags);
         self.socket.send_to(formatted_metric.as_slice(), &self.to_addr)?;
         Ok(())
     }

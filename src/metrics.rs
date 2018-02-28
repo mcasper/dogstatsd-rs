@@ -1,9 +1,16 @@
 use chrono::{DateTime, Utc};
 
-pub fn format_for_send<I, S>(metric: &str, namespace: &str, tags: I) -> Vec<u8>
-    where I: IntoIterator<Item=S>,
+pub fn format_for_send<M, I, S>(in_metric: &M, in_namespace: &str, tags: I) -> Vec<u8>
+    where M: Metric,
+          I: IntoIterator<Item=S>,
           S: AsRef<str>,
 {
+    let metric = in_metric.metric_type_format();
+    let namespace = if in_metric.uses_namespace() {
+        in_namespace
+    } else {
+        ""
+    };
     let mut buf = Vec::with_capacity(metric.len() + namespace.len());
 
     if !namespace.is_empty() {
@@ -35,6 +42,10 @@ pub fn format_for_send<I, S>(metric: &str, namespace: &str, tags: I) -> Vec<u8>
 
 pub trait Metric {
     fn metric_type_format(&self) -> String;
+
+    fn uses_namespace(&self) -> bool {
+        return true;
+    }
 }
 
 pub enum CountMetric<'a> {
@@ -259,6 +270,10 @@ pub struct ServiceCheck<'a> {
 }
 
 impl<'a> Metric for ServiceCheck<'a> {
+    fn uses_namespace(&self) -> bool {
+        return false;
+    }
+
     // _sc|my_service.can_connect|1
     fn metric_type_format(&self) -> String {
         let mut buf = String::with_capacity(6 + self.stat.len() + self.options.len());
@@ -302,6 +317,10 @@ pub struct Event<'a> {
 }
 
 impl<'a> Metric for Event<'a> {
+    fn uses_namespace(&self) -> bool {
+        return false;
+    }
+
     fn metric_type_format(&self) -> String {
         let title_len = self.title.len().to_string();
         let text_len = self.text.len().to_string();
@@ -335,24 +354,32 @@ mod tests {
     #[test]
     fn test_format_for_send_no_tags() {
         assert_eq!(
-            &b"namespace.metric:val|v"[..],
-            &format_for_send("metric:val|v", "namespace", &[] as &[String])[..]
+            &b"namespace.foo:1|c"[..],
+            &format_for_send(&CountMetric::Incr("foo"), "namespace", &[] as &[String])[..]
         )
     }
 
     #[test]
     fn test_format_for_send_no_namespace() {
         assert_eq!(
-            &b"metric:val|v|#tag:1,tag:2"[..],
-            &format_for_send("metric:val|v", "", &["tag:1", "tag:2"])[..]
+            &b"foo:1|c|#tag:1,tag:2"[..],
+            &format_for_send(&CountMetric::Incr("foo"), "", &["tag:1", "tag:2"])[..]
         )
     }
 
     #[test]
     fn test_format_for_send_everything() {
         assert_eq!(
-            &b"namespace.metric:val|v|#tag:1,tag:2"[..],
-            &format_for_send("metric:val|v", "namespace", &["tag:1", "tag:2"])[..]
+            &b"namespace.foo:1|c|#tag:1,tag:2"[..],
+            &format_for_send(&CountMetric::Incr("foo"), "namespace", &["tag:1", "tag:2"])[..]
+        )
+    }
+
+    #[test]
+    fn test_format_for_send_everything_omit_namespace() {
+        assert_eq!(
+            &b"_e{5,4}:title|text|#tag:1,tag:2"[..],
+            &format_for_send(&Event::new("title".into(), "text".into()), "namespace", &["tag:1", "tag:2"])[..]
         )
     }
 
