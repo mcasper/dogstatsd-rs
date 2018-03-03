@@ -1,3 +1,7 @@
+## 0.4.1
+
+* Don't send namespaces for service checks or events - https://github.com/mcasper/dogstatsd-rs/pull/18
+
 ## 0.4
 
 * Support service checks
