@@ -182,6 +182,32 @@ impl<'a> HistogramMetric<'a> {
     }
 }
 
+pub struct DistributionMetric<'a> {
+    stat: &'a str,
+    val: &'a str,
+}
+
+impl<'a>Metric for DistributionMetric<'a> {
+    // my_distribution:1000|d
+    fn metric_type_format(&self) -> String {
+        let mut buf = String::with_capacity(3 + self.stat.len() + self.val.len());
+        buf.push_str(self.stat);
+        buf.push_str(":");
+        buf.push_str(self.val);
+        buf.push_str("|d");
+        buf
+    }
+}
+
+impl<'a> DistributionMetric<'a> {
+    pub fn new(stat: &'a str, val: &'a str) -> Self {
+        DistributionMetric {
+            stat: stat,
+            val: val,
+        }
+    }
+}
+
 pub struct SetMetric<'a> {
     stat: &'a str,
     val: &'a str,
@@ -425,6 +451,13 @@ mod tests {
         let metric = HistogramMetric::new("histogram".into(), "67890".into());
 
         assert_eq!("histogram:67890|h", metric.metric_type_format())
+    }
+
+    #[test]
+    fn test_distribution_metric() {
+        let metric = DistributionMetric::new("distribution".into(), "67890".into());
+
+        assert_eq!("distribution:67890|d", metric.metric_type_format())
     }
 
     #[test]

@@ -8,6 +8,9 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Support for the distribution metric type
+
 ## [0.4.1] - 2018-03-02
 
 ### Fixed
