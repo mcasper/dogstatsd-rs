@@ -1,8 +1,11 @@
 use std::error::Error;
 use std::{fmt, io};
 
+/// This type represents the possible errors that can occur while
+/// sending DogstatsD metrics.
 #[derive(Debug)]
 pub enum DogstatsdError {
+    /// Chained IO errors.
     IoError(io::Error),
 }
 
