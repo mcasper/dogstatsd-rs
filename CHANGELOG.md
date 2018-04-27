@@ -8,8 +8,14 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2018-04-26
+
 ### Added
-- Support for the distribution metric type
+- Support for the distribution metric type - https://github.com/mcasper/dogstatsd-rs/commit/e04d0ee913da93c91d9f41c94dd9d3b099b511a7
+- Make DogstatsdError type public - https://github.com/mcasper/dogstatsd-rs/pull/21<Paste>
+
+### Improved
+- Allow stat and value arguments to be separate types - https://github.com/mcasper/dogstatsd-rs/commit/f1927ad1918f821fc6771a20b2b9c4abf9c0bcd9
 
 ## [0.4.1] - 2018-03-02
 
