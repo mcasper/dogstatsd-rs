@@ -283,9 +283,10 @@ impl Client {
     ///   client.gauge("gauge", "12345", &["tag:gauge"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn gauge<'a, I, S, T>(&self, stat: S, val: S, tags: I) -> DogstatsdResult
+    pub fn gauge<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
+              SS: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
         match (stat.into(), val.into()) {
@@ -307,9 +308,10 @@ impl Client {
     ///   client.histogram("histogram", "67890", &["tag:histogram"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn histogram<'a, I, S, T>(&self, stat: S, val: S, tags: I) -> DogstatsdResult
+    pub fn histogram<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
+              SS: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
         match (stat.into(), val.into()) {
@@ -331,9 +333,10 @@ impl Client {
     ///   client.distribution("distribution", "67890", &["tag:distribution"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn distribution<'a, I, S, T>(&self, stat: S, val: S, tags: I) -> DogstatsdResult
+    pub fn distribution<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
+              SS: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
         match (stat.into(), val.into()) {
@@ -355,9 +358,10 @@ impl Client {
     ///   client.set("set", "13579", &["tag:set"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn set<'a, I, S, T>(&self, stat: S, val: S, tags: I) -> DogstatsdResult
+    pub fn set<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
+              SS: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
         match (stat.into(), val.into()) {
@@ -417,9 +421,10 @@ impl Client {
     ///   client.event("Event Title", "Event Body", &["tag:event"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn event<'a, I, S, T>(&self, title: S, text: S, tags: I) -> DogstatsdResult
+    pub fn event<'a, I, S, SS, T>(&self, title: S, text: SS, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
+              SS: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
         match (title.into(), text.into()) {
