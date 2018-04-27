@@ -70,7 +70,7 @@ use std::net::UdpSocket;
 use std::borrow::Cow;
 
 mod error;
-use self::error::DogstatsdError;
+pub use self::error::DogstatsdError;
 
 mod metrics;
 use self::metrics::*;
