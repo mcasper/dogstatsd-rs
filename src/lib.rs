@@ -67,14 +67,13 @@ extern crate chrono;
 
 use chrono::Utc;
 use std::net::UdpSocket;
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 
 mod error;
 pub use self::error::DogstatsdError;
 
 mod metrics;
 use self::metrics::*;
-
 pub use self::metrics::{ServiceStatus, ServiceCheckOptions};
 
 /// A type alias for returning a unit type or an error
@@ -255,21 +254,25 @@ impl Client {
     /// # Examples
     ///
     /// ```
+    ///   # extern crate chrono;
+    ///   # extern crate dogstatsd;
+    ///   # fn main() {
     ///   use dogstatsd::{Client, Options};
     ///
     ///   let client = Client::new(Options::default()).unwrap();
     ///   client.timing("timing", 350, &["tag:timing"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   client.timing("timing", chrono::Duration::seconds(2), &["tag:timing"])
+    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   # }
     /// ```
-    pub fn timing<'a, I, S, T>(&self, stat: S, ms: i64, tags: I) -> DogstatsdResult
+    pub fn timing<'a, I, S, V, T>(&self, stat: S, duration: V, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
+              V: DurationMeasure,
               T: AsRef<str>,
     {
-        match stat.into() {
-            Cow::Borrowed(stat) => self.send(&TimingMetric::new(stat, ms), tags),
-            Cow::Owned(stat) => self.send(&TimingMetric::new(&stat, ms), tags)
-        }
+        self.send(&TimingMetric::new(stat.into().borrow(), duration.as_milliseconds()), tags)
     }
 
     /// Report an arbitrary value as a gauge
@@ -282,19 +285,18 @@ impl Client {
     ///   let client = Client::new(Options::default()).unwrap();
     ///   client.gauge("gauge", "12345", &["tag:gauge"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   client.gauge("gauge", 12345, &["tag:gauge"])
+    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   client.gauge("gauge", 123.45, &["tag:gauge"])
+    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn gauge<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
+    pub fn gauge<'a, I, S, V, T>(&self, stat: S, val: V, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
-              SS: Into<Cow<'a, str>>,
+              V: Measure<'a>,
               T: AsRef<str>,
     {
-        match (stat.into(), val.into()) {
-            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(&GaugeMetric::new(stat, val), tags),
-            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(&GaugeMetric::new(&stat, val), tags),
-            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(&GaugeMetric::new(stat, &val), tags),
-            (Cow::Owned(stat), Cow::Owned(val)) => self.send(&GaugeMetric::new(&stat, &val), tags)
-        }
+        self.send(&GaugeMetric::new(stat.into().borrow(), val.to_cow().borrow()), tags)
     }
 
     /// Report a value in a histogram
@@ -307,19 +309,16 @@ impl Client {
     ///   let client = Client::new(Options::default()).unwrap();
     ///   client.histogram("histogram", "67890", &["tag:histogram"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   client.histogram("histogram", 67.890, &["tag:histogram"])
+    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn histogram<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
+    pub fn histogram<'a, I, S, V, T>(&self, stat: S, val: V, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
-              SS: Into<Cow<'a, str>>,
+              V: Measure<'a>,
               T: AsRef<str>,
     {
-        match (stat.into(), val.into()) {
-            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(&HistogramMetric::new(stat, val), tags),
-            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(&HistogramMetric::new(&stat, val), tags),
-            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(&HistogramMetric::new(stat, &val), tags),
-            (Cow::Owned(stat), Cow::Owned(val)) => self.send(&HistogramMetric::new(&stat, &val), tags)
-        }
+        self.send(&HistogramMetric::new(stat.into().borrow(), val.to_cow().borrow()), tags)
     }
 
     /// Report a value in a distribution
@@ -332,19 +331,18 @@ impl Client {
     ///   let client = Client::new(Options::default()).unwrap();
     ///   client.distribution("distribution", "67890", &["tag:distribution"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   client.distribution("distribution", 67890, &["tag:distribution"])
+    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   client.distribution("distribution", 67.890, &["tag:distribution"])
+    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn distribution<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
+    pub fn distribution<'a, I, S, V, T>(&self, stat: S, val: V, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
-              SS: Into<Cow<'a, str>>,
+              V: Measure<'a>,
               T: AsRef<str>,
     {
-        match (stat.into(), val.into()) {
-            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(&DistributionMetric::new(stat, val), tags),
-            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(&DistributionMetric::new(&stat, val), tags),
-            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(&DistributionMetric::new(stat, &val), tags),
-            (Cow::Owned(stat), Cow::Owned(val)) => self.send(&DistributionMetric::new(&stat, &val), tags)
-        }
+        self.send(&DistributionMetric::new(stat.into().borrow(), val.to_cow().borrow()), tags)
     }
 
     /// Report a value in a set
@@ -357,19 +355,16 @@ impl Client {
     ///   let client = Client::new(Options::default()).unwrap();
     ///   client.set("set", "13579", &["tag:set"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   client.set("set", 13579, &["tag:set"])
+    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn set<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
+    pub fn set<'a, I, S, V, T>(&self, stat: S, val: V, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
-              SS: Into<Cow<'a, str>>,
+              V: Measure<'a>,
               T: AsRef<str>,
     {
-        match (stat.into(), val.into()) {
-            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(&SetMetric::new(stat, val), tags),
-            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(&SetMetric::new(&stat, val), tags),
-            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(&SetMetric::new(stat, &val), tags),
-            (Cow::Owned(stat), Cow::Owned(val)) => self.send(&SetMetric::new(&stat, &val), tags)
-        }
+        self.send(&SetMetric::new(stat.into().borrow(), val.to_cow().borrow()), tags)
     }
 
     /// Report the status of a service
@@ -427,12 +422,7 @@ impl Client {
               SS: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        match (title.into(), text.into()) {
-            (Cow::Borrowed(title), Cow::Borrowed(text)) => self.send(&Event::new(title, text), tags),
-            (Cow::Owned(title), Cow::Borrowed(text)) => self.send(&Event::new(&title, text), tags),
-            (Cow::Borrowed(title), Cow::Owned(text)) => self.send(&Event::new(title, &text), tags),
-            (Cow::Owned(title), Cow::Owned(text)) => self.send(&Event::new(&title, &text), tags)
-        }
+        self.send(&Event::new(title.into().borrow(), text.into().borrow()), tags)
     }
 
     fn send<I, M, S>(&self, metric: &M, tags: I) -> DogstatsdResult
@@ -443,6 +433,48 @@ impl Client {
         let formatted_metric = format_for_send(metric, &self.namespace, tags);
         self.socket.send_to(formatted_metric.as_slice(), &self.to_addr)?;
         Ok(())
+    }
+}
+
+/// General measurement types
+pub trait Measure<'a> {
+    /// Format measurement into str
+    fn to_cow(&self) -> Cow<'a, str>;
+}
+
+impl<'a> Measure<'a> for &'a str {
+    fn to_cow(&self) -> Cow<'a, str> {
+        Cow::from(*self)
+    }
+}
+
+impl<'a> Measure<'a> for i64 {
+    fn to_cow(&self) -> Cow<'a, str> {
+        Cow::from(format!("{}", self))
+    }
+}
+
+impl<'a> Measure<'a> for f64 {
+    fn to_cow(&self) -> Cow<'a, str> {
+        Cow::from(format!("{}", self)) // TODO: this changes the format
+    }
+}
+
+/// Duration types
+pub trait DurationMeasure {
+    /// Return duration as milliseconds
+    fn as_milliseconds(&self) -> i64;
+}
+
+impl DurationMeasure for i64 {
+    fn as_milliseconds(&self) -> i64 {
+        *self
+    }
+}
+
+impl DurationMeasure for chrono::Duration {
+    fn as_milliseconds(&self) -> i64 {
+        self.num_milliseconds()
     }
 }
 
