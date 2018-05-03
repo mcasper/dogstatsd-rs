@@ -111,6 +111,12 @@ impl<'a> Metric for TimingMetric<'a> {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum Measurement {
+    Int(i64),
+    Float(f64),
+}
+
 macro_rules! measurement_metric {
     ($t:ident, $suffix:expr) => (
 
@@ -138,23 +144,36 @@ macro_rules! measurement_metric {
     )
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum Measurement {
-    Int(i64),
-    Float(f64),
+macro_rules! measurement_from {
+    ($t:ty, Int) => (
+        impl From<$t> for Measurement {
+            fn from(value: $t) -> Measurement {
+                Measurement::Int(value as i64)
+            }
+        }
+    );
+
+    ($t:ty, Float) => (
+        impl From<$t> for Measurement {
+            fn from(value: $t) -> Measurement {
+                Measurement::Float(value as f64)
+            }
+        }
+    )
 }
 
-impl From<i64> for Measurement {
-    fn from(value: i64) -> Measurement {
-        Measurement::Int(value)
-    }
-}
-
-impl From<f64> for Measurement {
-    fn from(value: f64) -> Measurement {
-        Measurement::Float(value)
-    }
-}
+measurement_from!(usize, Int);
+measurement_from!(isize, Int);
+measurement_from!(u8,  Int);
+measurement_from!(i8,  Int);
+measurement_from!(u16, Int);
+measurement_from!(i16, Int);
+measurement_from!(u32, Int);
+measurement_from!(i32, Int);
+measurement_from!(u64, Int);
+measurement_from!(i64, Int);
+measurement_from!(f32, Float);
+measurement_from!(f64, Float);
 
 measurement_metric!(GaugeMetric, "|g");
 measurement_metric!(HistogramMetric, "|h");
