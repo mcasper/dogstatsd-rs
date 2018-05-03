@@ -75,9 +75,9 @@ impl<'a> Metric for CountMetric<'a> {
 }
 
 pub struct TimeMetric<'a> {
-    start_time: &'a DateTime<Utc>,
-    end_time: &'a DateTime<Utc>,
-    stat: &'a str,
+    pub start_time: &'a DateTime<Utc>,
+    pub end_time: &'a DateTime<Utc>,
+    pub stat: &'a str,
 }
 
 impl<'a> Metric for TimeMetric<'a> {
@@ -93,19 +93,9 @@ impl<'a> Metric for TimeMetric<'a> {
     }
 }
 
-impl<'a> TimeMetric<'a> {
-    pub fn new(stat: &'a str, start_time: &'a DateTime<Utc>, end_time: &'a DateTime<Utc>) -> Self {
-        TimeMetric {
-            start_time: start_time,
-            end_time: end_time,
-            stat: stat,
-        }
-    }
-}
-
 pub struct TimingMetric<'a> {
-    ms: i64,
-    stat: &'a str,
+    pub ms: i64,
+    pub stat: &'a str,
 }
 
 impl<'a> Metric for TimingMetric<'a> {
@@ -121,118 +111,55 @@ impl<'a> Metric for TimingMetric<'a> {
     }
 }
 
-impl<'a> TimingMetric<'a> {
-    pub fn new(stat: &'a str, ms: i64) -> Self {
-        TimingMetric {
-            ms: ms,
-            stat: stat,
+macro_rules! measurement_metric {
+    ($t:ident, $suffix:expr) => (
+
+        pub struct $t<'a> {
+            pub stat: &'a str,
+            pub val: Measurement,
         }
-    }
-}
+        
+        impl<'a> Metric for $t<'a> {
+            // my_gauge:1000|$suffix
+            fn metric_type_format(&self) -> String {
+                let val = match self.val {
+                    Measurement::Int(i) => format!("{}", i),
+                    Measurement::Float(f) => format!("{:.6}", f),
+                };
 
-pub struct GaugeMetric<'a> {
-    stat: &'a str,
-    val: &'a str,
-}
-
-impl<'a> Metric for GaugeMetric<'a> {
-    // my_gauge:1000|g
-    fn metric_type_format(&self) -> String {
-        let mut buf = String::with_capacity(3 + self.stat.len() + self.val.len());
-        buf.push_str(self.stat);
-        buf.push_str(":");
-        buf.push_str(self.val);
-        buf.push_str("|g");
-        buf
-    }
-}
-
-impl<'a> GaugeMetric<'a> {
-    pub fn new(stat: &'a str, val: &'a str) -> Self {
-        GaugeMetric {
-            stat: stat,
-            val: val,
+                let mut buf = String::with_capacity(3 + self.stat.len() + val.len());
+                buf.push_str(self.stat);
+                buf.push_str(":");
+                buf.push_str(&val);
+                buf.push_str($suffix);
+                buf
+            }
         }
+    )
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Measurement {
+    Int(i64),
+    Float(f64),
+}
+
+impl From<i64> for Measurement {
+    fn from(value: i64) -> Measurement {
+        Measurement::Int(value)
     }
 }
 
-pub struct HistogramMetric<'a> {
-    stat: &'a str,
-    val: &'a str,
-}
-
-impl<'a> Metric for HistogramMetric<'a> {
-    // my_histogram:1000|h
-    fn metric_type_format(&self) -> String {
-        let mut buf = String::with_capacity(3 + self.stat.len() + self.val.len());
-        buf.push_str(self.stat);
-        buf.push_str(":");
-        buf.push_str(self.val);
-        buf.push_str("|h");
-        buf
+impl From<f64> for Measurement {
+    fn from(value: f64) -> Measurement {
+        Measurement::Float(value)
     }
 }
 
-impl<'a> HistogramMetric<'a> {
-    pub fn new(stat: &'a str, val: &'a str) -> Self {
-        HistogramMetric {
-            stat: stat,
-            val: val,
-        }
-    }
-}
-
-pub struct DistributionMetric<'a> {
-    stat: &'a str,
-    val: &'a str,
-}
-
-impl<'a>Metric for DistributionMetric<'a> {
-    // my_distribution:1000|d
-    fn metric_type_format(&self) -> String {
-        let mut buf = String::with_capacity(3 + self.stat.len() + self.val.len());
-        buf.push_str(self.stat);
-        buf.push_str(":");
-        buf.push_str(self.val);
-        buf.push_str("|d");
-        buf
-    }
-}
-
-impl<'a> DistributionMetric<'a> {
-    pub fn new(stat: &'a str, val: &'a str) -> Self {
-        DistributionMetric {
-            stat: stat,
-            val: val,
-        }
-    }
-}
-
-pub struct SetMetric<'a> {
-    stat: &'a str,
-    val: &'a str,
-}
-
-impl<'a> Metric for SetMetric<'a> {
-    // my_set:45|s
-    fn metric_type_format(&self) -> String {
-        let mut buf = String::with_capacity(3 + self.stat.len() + self.val.len());
-        buf.push_str(self.stat);
-        buf.push_str(":");
-        buf.push_str(self.val);
-        buf.push_str("|s");
-        buf
-    }
-}
-
-impl<'a> SetMetric<'a> {
-    pub fn new(stat: &'a str, val: &'a str) -> Self {
-        SetMetric {
-            stat: stat,
-            val: val,
-        }
-    }
-}
+measurement_metric!(GaugeMetric, "|g");
+measurement_metric!(HistogramMetric, "|h");
+measurement_metric!(DistributionMetric, "|d");
+measurement_metric!(SetMetric, "|s");
 
 /// Represents the different states a service can be in
 #[derive(Clone, Copy, Debug)]
@@ -279,9 +206,9 @@ impl ServiceCheckOptions {
 }
 
 pub struct ServiceCheck<'a> {
-    stat: &'a str,
-    val: ServiceStatus,
-    options: ServiceCheckOptions,
+    pub stat: &'a str,
+    pub val: ServiceStatus,
+    pub options: ServiceCheckOptions,
 }
 
 impl<'a> Metric for ServiceCheck<'a> {
@@ -297,32 +224,22 @@ impl<'a> Metric for ServiceCheck<'a> {
         buf.push_str("|");
         buf.push_str(&format!("{}", self.val as u8));
 
-        if self.options.timestamp.is_some() {
+        if let Some(timestamp) = self.options.timestamp {
             buf.push_str("|d:");
-            buf.push_str(&format!("{}", self.options.timestamp.unwrap()));
+            buf.push_str(&format!("{}", timestamp));
         }
 
-        if self.options.hostname.is_some() {
+        if let Some(hostname) = self.options.hostname {
             buf.push_str("|h:");
-            buf.push_str(self.options.hostname.unwrap());
+            buf.push_str(hostname);
         }
 
-        if self.options.message.is_some() {
+        if let Some(message) = self.options.message {
             buf.push_str("|m:");
-            buf.push_str(self.options.message.unwrap());
+            buf.push_str(message);
         }
 
         buf
-    }
-}
-
-impl<'a> ServiceCheck<'a> {
-    pub fn new(stat: &'a str, val: ServiceStatus, options: ServiceCheckOptions) -> Self {
-        ServiceCheck {
-            stat: stat,
-            val: val,
-            options: options,
-        }
     }
 }
 
@@ -414,51 +331,51 @@ mod tests {
 
     #[test]
     fn test_time_metric() {
-        let start_time = Utc.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 0);
-        let end_time = Utc.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 900);
-        let metric = TimeMetric::new("time".into(), &start_time, &end_time);
+        let ref start_time = Utc.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 0);
+        let ref end_time = Utc.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 900);
+        let metric = TimeMetric { stat: "time".into(), start_time, end_time };
 
         assert_eq!("time:900|ms", metric.metric_type_format())
     }
 
     #[test]
     fn test_timing_metric() {
-        let metric = TimingMetric::new("timing".into(), 720);
+        let metric = TimingMetric { stat: "timing".into(), ms: 720 };
 
         assert_eq!("timing:720|ms", metric.metric_type_format())
     }
 
     #[test]
     fn test_gauge_metric() {
-        let metric = GaugeMetric::new("gauge".into(), "12345".into());
+        let metric = GaugeMetric { stat: "gauge".into(), val: 12345.into() };
 
         assert_eq!("gauge:12345|g", metric.metric_type_format())
     }
 
     #[test]
     fn test_histogram_metric() {
-        let metric = HistogramMetric::new("histogram".into(), "67890".into());
+        let metric = HistogramMetric { stat: "histogram".into(), val: 67890.into() };
 
         assert_eq!("histogram:67890|h", metric.metric_type_format())
     }
 
     #[test]
     fn test_distribution_metric() {
-        let metric = DistributionMetric::new("distribution".into(), "67890".into());
+        let metric = DistributionMetric { stat: "distribution".into(), val: 67890.into() };
 
         assert_eq!("distribution:67890|d", metric.metric_type_format())
     }
 
     #[test]
     fn test_set_metric() {
-        let metric = SetMetric::new("set".into(), "13579".into());
+        let metric = SetMetric { stat: "set".into(), val: 13579.into() };
 
         assert_eq!("set:13579|s", metric.metric_type_format())
     }
 
     #[test]
     fn test_service_check() {
-        let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, ServiceCheckOptions::default());
+        let metric = ServiceCheck { stat: "redis.can_connect".into(), val: ServiceStatus::Warning, options: ServiceCheckOptions::default() };
 
         assert_eq!("_sc|redis.can_connect|1", metric.metric_type_format())
     }
@@ -469,7 +386,7 @@ mod tests {
             timestamp: Some(1234567890),
             ..Default::default()
         };
-        let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, options);
+        let metric = ServiceCheck { stat: "redis.can_connect".into(), val: ServiceStatus::Warning, options };
 
         assert_eq!("_sc|redis.can_connect|1|d:1234567890", metric.metric_type_format())
     }
@@ -480,7 +397,7 @@ mod tests {
             hostname: Some("my_server.localhost"),
             ..Default::default()
         };
-        let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, options);
+        let metric = ServiceCheck { stat: "redis.can_connect".into(), val: ServiceStatus::Warning, options };
 
         assert_eq!("_sc|redis.can_connect|1|h:my_server.localhost", metric.metric_type_format())
     }
@@ -491,7 +408,7 @@ mod tests {
             message: Some("Service is possibly down"),
             ..Default::default()
         };
-        let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, options);
+        let metric = ServiceCheck { stat: "redis.can_connect".into(), val: ServiceStatus::Warning, options };
 
         assert_eq!("_sc|redis.can_connect|1|m:Service is possibly down", metric.metric_type_format())
     }
@@ -503,7 +420,7 @@ mod tests {
             hostname: Some("my_server.localhost"),
             message: Some("Service is possibly down")
         };
-        let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, options);
+        let metric = ServiceCheck { stat: "redis.can_connect".into(), val: ServiceStatus::Warning, options };
 
         assert_eq!(
             "_sc|redis.can_connect|1|d:1234567890|h:my_server.localhost|m:Service is possibly down",
