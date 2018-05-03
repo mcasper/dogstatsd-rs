@@ -399,10 +399,7 @@ impl Client {
               T: AsRef<str>,
     {
         let unwrapped_options = options.unwrap_or(ServiceCheckOptions::default());
-        match stat.into() {
-            Cow::Borrowed(stat) => self.send(&ServiceCheck::new(stat, val, unwrapped_options), tags),
-            Cow::Owned(stat) => self.send(&ServiceCheck::new(&stat, val, unwrapped_options), tags),
-        }
+        self.send(&ServiceCheck::new(stat.into().borrow(), val, unwrapped_options), tags)
     }
 
     /// Send a custom event as a title and a body
@@ -450,13 +447,13 @@ impl<'a> Measure<'a> for &'a str {
 
 impl<'a> Measure<'a> for i64 {
     fn to_cow(&self) -> Cow<'a, str> {
-        Cow::from(format!("{}", self))
+        Cow::from(format!("{:.6}", self))
     }
 }
 
 impl<'a> Measure<'a> for f64 {
     fn to_cow(&self) -> Cow<'a, str> {
-        Cow::from(format!("{}", self)) // TODO: this changes the format
+        Cow::from(format!("{:.6}", self))
     }
 }
 
@@ -469,6 +466,13 @@ pub trait DurationMeasure {
 impl DurationMeasure for i64 {
     fn as_milliseconds(&self) -> i64 {
         *self
+    }
+}
+
+impl DurationMeasure for std::time::Duration {
+    fn as_milliseconds(&self) -> i64 {
+        // TODO this ignores subseconds in the duration
+        self.as_secs() as i64 * 1000
     }
 }
 

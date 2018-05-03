@@ -238,24 +238,13 @@ impl<'a> SetMetric<'a> {
 #[derive(Clone, Copy, Debug)]
 pub enum ServiceStatus {
     /// OK State
-    OK,
+    OK = 0,
     /// Warning State
-    Warning,
+    Warning = 1,
     /// Critical State
-    Critical,
+    Critical = 2,
     /// Unknown State
-    Unknown,
-}
-
-impl ServiceStatus {
-    fn to_int(&self) -> i32 {
-        match *self {
-            ServiceStatus::OK => 0,
-            ServiceStatus::Warning => 1,
-            ServiceStatus::Critical => 2,
-            ServiceStatus::Unknown => 3,
-        }
-    }
+    Unknown = 3,
 }
 
 /// Struct for adding optional pieces to a service check
@@ -306,7 +295,7 @@ impl<'a> Metric for ServiceCheck<'a> {
         buf.push_str("_sc|");
         buf.push_str(self.stat);
         buf.push_str("|");
-        buf.push_str(&format!("{}", self.val.to_int()));
+        buf.push_str(&format!("{}", self.val as u8));
 
         if self.options.timestamp.is_some() {
             buf.push_str("|d:");
