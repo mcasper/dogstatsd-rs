@@ -185,9 +185,8 @@ impl Client {
     ///   client.incr("counter", &["tag:counter"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn incr<I, T>(&self, stat: &str, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              T: AsRef<str>,
+    pub fn incr<I>(&self, stat: &str, tags: I) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>
     {
         let val = 1;
         self.send(&Metric::Count { stat, val: val.into() }, tags)
@@ -204,9 +203,8 @@ impl Client {
     ///   client.decr("counter", &["tag:counter"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn decr<I, T>(&self, stat: &str, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              T: AsRef<str>,
+    pub fn decr<I>(&self, stat: &str, tags: I) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>
     {
         let val = -1;
         self.send(&Metric::Count { stat, val: val.into() }, tags)
@@ -226,10 +224,9 @@ impl Client {
     ///       thread::sleep(Duration::from_millis(200))
     ///   }).unwrap_or_else(|e| println!("Encountered error: {}", e))
     /// ```
-    pub fn time<F, I, T>(&self, stat: &str, tags: I, block: F) -> DogstatsdResult
-        where F: FnOnce(),
-              I: IntoIterator<Item=T>,
-              T: AsRef<str>,
+    pub fn time<I, F>(&self, stat: &str, tags: I, block: F) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>,
+              F: FnOnce()
     {
         let start_time = Utc::now();
         block();
@@ -255,10 +252,9 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     ///   # }
     /// ```
-    pub fn timing<I, T, V>(&self, stat: &str, duration: V, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              T: AsRef<str>,
-              V: Into<DurationMeasurement>,
+    pub fn timing<I, V>(&self, stat: &str, duration: V, tags: I) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>,
+              V: Into<DurationMeasurement>
     {
         self.send(&Metric::Timing { stat, val: duration.into() }, tags)
     }
@@ -276,10 +272,9 @@ impl Client {
     ///   client.gauge("gauge", 123.45, &["tag:gauge"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn gauge<I, T, V>(&self, stat: &str, val: V, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              T: AsRef<str>,
-              V: Into<Measurement>,
+    pub fn gauge<I, V>(&self, stat: &str, val: V, tags: I) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>,
+              V: Into<Measurement>
     {
         self.send(&Metric::Gauge { stat, val: val.into() }, tags)
     }
@@ -295,10 +290,9 @@ impl Client {
     ///   client.histogram("histogram", 67.890, &["tag:histogram"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn histogram<I, T, V>(&self, stat: &str, val: V, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              T: AsRef<str>,
-              V: Into<Measurement>,
+    pub fn histogram<I, V>(&self, stat: &str, val: V, tags: I) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>,
+              V: Into<Measurement>
     {
         self.send(&Metric::Histogram { stat, val: val.into() }, tags)
     }
@@ -316,10 +310,9 @@ impl Client {
     ///   client.distribution("distribution", 67.890, &["tag:distribution"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn distribution<I, T, V>(&self, stat: &str, val: V, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              T: AsRef<str>,
-              V: Into<Measurement>,
+    pub fn distribution<I, V>(&self, stat: &str, val: V, tags: I) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>,
+              V: Into<Measurement>
     {
         self.send(&Metric::Distribution { stat, val: val.into() }, tags)
     }
@@ -335,10 +328,9 @@ impl Client {
     ///   client.set("set", 13579, &["tag:set"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn set<I, T, V>(&self, stat: &str, val: V, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              T: AsRef<str>,
-              V: Into<Measurement>,
+    pub fn set<I, V>(&self, stat: &str, val: V, tags: I) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>,
+              V: Into<Measurement>
     {
         self.send(&Metric::Set { stat, val: val.into() }, tags)
     }
@@ -369,9 +361,8 @@ impl Client {
     ///   client.service_check("redis.can_connect", ServiceStatus::OK, &["tag:service"], Some(all_options))
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn service_check<I, T>(&self, stat: &str, val: ServiceStatus, tags: I, options: Option<ServiceCheckOptions>) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              T: AsRef<str>,
+    pub fn service_check<I>(&self, stat: &str, val: ServiceStatus, tags: I, options: Option<ServiceCheckOptions>) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>
     {
         let opt = options.unwrap_or(ServiceCheckOptions::default());
         self.send(&Metric::ServiceCheck { stat, val, opt }, tags)
@@ -388,16 +379,14 @@ impl Client {
     ///   client.event("Event Title", "Event Body", &["tag:event"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn event<I, T>(&self, title: &str, text: &str, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              T: AsRef<str>,
+    pub fn event<I>(&self, title: &str, text: &str, tags: I) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>
     {
         self.send(&Metric::Event { title, text }, tags)
     }
 
-    fn send<I, T>(&self, metric: &Metric, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              T: AsRef<str>,
+    fn send<I>(&self, metric: &Metric, tags: I) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>
     {
         let formatted_metric = format_for_send(metric, &self.namespace, tags);
         self.socket.send_to(formatted_metric.as_slice(), &self.to_addr)?;
