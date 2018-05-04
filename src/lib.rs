@@ -18,7 +18,7 @@
 //!
 //! // Binds to 127.0.0.1:9000 for transmitting and sends to 10.1.2.3:8125, with a
 //! // namespace of "analytics".
-//! let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics");
+//! let custom_options = Options { from_addr: "127.0.0.1:9000", to_addr: "10.1.2.3:8125", namespace: "analytics" };
 //! let custom_client = Client::new_with_options(custom_options).unwrap();
 //! ```
 //!
@@ -79,16 +79,16 @@ pub type DogstatsdResult = Result<(), DogstatsdError>;
 
 /// The struct that represents the options available for the Dogstatsd client.
 #[derive(Debug, PartialEq)]
-pub struct Options {
+pub struct Options<'a> {
     /// The address of the udp socket we'll bind to for sending.
-    pub from_addr: String,
+    pub from_addr: &'a str,
     /// The address of the udp socket we'll send metrics and events to.
-    pub to_addr: String,
+    pub to_addr: &'a str,
     /// A namespace to prefix all metrics with, joined with a '.'.
-    pub namespace: String,
+    pub namespace: &'a str,
 }
 
-impl Default for Options {
+impl<'a> Default for Options<'a> {
     /// Create a new options struct with all the default settings.
     ///
     /// # Examples
@@ -100,60 +100,37 @@ impl Default for Options {
     ///
     ///   assert_eq!(
     ///       Options {
-    ///           from_addr: "127.0.0.1:0".into(),
-    ///           to_addr: "127.0.0.1:8125".into(),
-    ///           namespace: String::new(),
+    ///           from_addr: "127.0.0.1:0",
+    ///           to_addr: "127.0.0.1:8125",
+    ///           namespace: "",
     ///       },
     ///       options
     ///   )
     /// ```
     fn default() -> Self {
         Options {
-            from_addr: "127.0.0.1:0".into(),
-            to_addr: "127.0.0.1:8125".into(),
-            namespace: String::new(),
-        }
-    }
-}
-
-impl Options {
-    /// Create a new options struct by supplying values for all fields.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    ///   use dogstatsd::Options;
-    ///
-    ///   let options = Options::new("127.0.0.1:9000", "127.0.0.1:9001", "");
-    /// ```
-    pub fn new(from_addr: &str, to_addr: &str, namespace: &str) -> Self {
-        Options {
-            from_addr: from_addr.into(),
-            to_addr: to_addr.into(),
-            namespace: namespace.into(),
+            from_addr: "127.0.0.1:0",
+            to_addr: "127.0.0.1:8125",
+            namespace: "",
         }
     }
 }
 
 /// The client struct that handles sending metrics to the Dogstatsd server.
 #[derive(Debug)]
-pub struct Client {
+pub struct Client<'a> {
     socket: UdpSocket,
-    from_addr: String,
-    to_addr: String,
-    namespace: String,
+    options: Options<'a>,
 }
 
-impl PartialEq for Client {
+impl<'a> PartialEq for Client<'a> {
     fn eq(&self, other: &Self) -> bool {
         // Ignore `socket`, which will never be the same
-        self.from_addr == other.from_addr &&
-        self.to_addr == other.to_addr &&
-        self.namespace == other.namespace
+        self.options == other.options
     }
 }
 
-impl Client {
+impl<'c> Client<'c> {
     /// Create a new client from an options struct.
     ///
     /// # Examples
@@ -176,12 +153,10 @@ impl Client {
     ///
     ///   let client = Client::new_with_options(Options::default()).unwrap();
     /// ```
-    pub fn new_with_options(options: Options) -> Result<Self, DogstatsdError> {
+    pub fn new_with_options(options: Options<'c>) -> Result<Self, DogstatsdError> {
         Ok(Client {
             socket: UdpSocket::bind(&options.from_addr)?,
-            from_addr: options.from_addr,
-            to_addr: options.to_addr,
-            namespace: options.namespace,
+            options: options,
         })
     }
 
@@ -200,6 +175,24 @@ impl Client {
     {
         self.count(stat, 1, tags)
     }
+
+    // /// Increment a StatsD counter
+    // ///
+    // /// # Examples
+    // ///
+    // /// ```
+    // ///   use dogstatsd::Client;
+    // ///
+    // ///   let client = Client::new().unwrap();
+    // ///   client.incr("counter", &["tag:counter"]).unwrap();
+    // /// ```
+    // pub fn rated_incr<I>(&self, stat: &str, tags: I, rate: f32) -> DogstatsdResult
+    //     where I: IntoIterator, I::Item: AsRef<str>
+    // {
+    //     if 
+
+    //     self.count(stat, 1, tags)
+    // }
 
     /// Decrement a StatsD counter
     ///
@@ -408,8 +401,8 @@ impl Client {
     fn send<I>(&self, metric: &Metric, tags: I) -> DogstatsdResult
         where I: IntoIterator, I::Item: AsRef<str>
     {
-        let formatted_metric = format_for_send(metric, &self.namespace, tags);
-        self.socket.send_to(formatted_metric.as_slice(), &self.to_addr)?;
+        let formatted_metric = format_for_send(metric, &self.options.namespace, tags);
+        self.socket.send_to(formatted_metric.as_slice(), &self.options.to_addr)?;
         Ok(())
     }
 }
@@ -422,9 +415,9 @@ mod tests {
     fn test_options_default() {
         let options = Options::default();
         let expected_options = Options {
-            from_addr: "127.0.0.1:0".into(),
-            to_addr: "127.0.0.1:8125".into(),
-            namespace: String::new(),
+            from_addr: "127.0.0.1:0",
+            to_addr: "127.0.0.1:8125",
+            namespace: "",
         };
 
         assert_eq!(expected_options, options)
@@ -435,9 +428,11 @@ mod tests {
         let client = Client::new().unwrap();
         let expected_client = Client {
             socket: UdpSocket::bind("127.0.0.1:0").unwrap(),
-            from_addr: "127.0.0.1:0".into(),
-            to_addr: "127.0.0.1:8125".into(),
-            namespace: String::new(),
+            options: Options {
+                from_addr: "127.0.0.1:0",
+                to_addr: "127.0.0.1:8125",
+                namespace: "",
+            }
         };
 
         assert_eq!(expected_client, client)
@@ -445,10 +440,10 @@ mod tests {
 
     #[test]
     fn test_send() {
-        let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "");
+        let options = Options { from_addr: "127.0.0.1:9001", to_addr: "127.0.0.1:9002", namespace: "" };
         let client = Client::new_with_options(options).unwrap();
         // Shouldn't panic or error
-        client.send(&Metric::Gauge { stat: "gauge".into(), val: 1234.into() }, &["tag1", "tag2"]).unwrap();
+        client.send(&Metric::Gauge { stat: "gauge", val: 1234.into() }, &["tag1", "tag2"]).unwrap();
     }
 }
 
