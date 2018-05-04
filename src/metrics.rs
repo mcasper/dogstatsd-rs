@@ -117,6 +117,24 @@ pub enum Measurement {
     Float(f64),
 }
 
+macro_rules! measurement_from {
+    ($t:ty, Int) => (
+        impl From<$t> for Measurement {
+            fn from(value: $t) -> Measurement {
+                Measurement::Int(value as i64)
+            }
+        }
+    );
+
+    ($t:ty, Float) => (
+        impl From<$t> for Measurement {
+            fn from(value: $t) -> Measurement {
+                Measurement::Float(value as f64)
+            }
+        }
+    )
+}
+
 macro_rules! measurement_metric {
     ($t:ident, $suffix:expr) => (
 
@@ -139,24 +157,6 @@ macro_rules! measurement_metric {
                 buf.push_str(&val);
                 buf.push_str($suffix);
                 buf
-            }
-        }
-    )
-}
-
-macro_rules! measurement_from {
-    ($t:ty, Int) => (
-        impl From<$t> for Measurement {
-            fn from(value: $t) -> Measurement {
-                Measurement::Int(value as i64)
-            }
-        }
-    );
-
-    ($t:ty, Float) => (
-        impl From<$t> for Measurement {
-            fn from(value: $t) -> Measurement {
-                Measurement::Float(value as f64)
             }
         }
     )
