@@ -62,10 +62,14 @@
 
 #![cfg_attr(feature = "unstable", feature(test))]
 #![deny(warnings, missing_debug_implementations, missing_copy_implementations, missing_docs)]
+
 extern crate chrono;
+extern crate rand;
 
 use chrono::Utc;
 use std::net::UdpSocket;
+
+use rand::Rng;
 
 mod error;
 pub use self::error::DogstatsdError;
@@ -121,6 +125,7 @@ impl<'a> Default for Options<'a> {
 pub struct Client<'a> {
     socket: UdpSocket,
     options: Options<'a>,
+    rng: rand::XorShiftRng,
 }
 
 impl<'a> PartialEq for Client<'a> {
@@ -157,6 +162,7 @@ impl<'c> Client<'c> {
         Ok(Client {
             socket: UdpSocket::bind(&options.from_addr)?,
             options: options,
+            rng: rand::weak_rng(),
         })
     }
 
@@ -176,23 +182,16 @@ impl<'c> Client<'c> {
         self.count(stat, 1, tags)
     }
 
-    // /// Increment a StatsD counter
-    // ///
-    // /// # Examples
-    // ///
-    // /// ```
-    // ///   use dogstatsd::Client;
-    // ///
-    // ///   let client = Client::new().unwrap();
-    // ///   client.incr("counter", &["tag:counter"]).unwrap();
-    // /// ```
-    // pub fn rated_incr<I>(&self, stat: &str, tags: I, rate: f32) -> DogstatsdResult
-    //     where I: IntoIterator, I::Item: AsRef<str>
-    // {
-    //     if 
-
-    //     self.count(stat, 1, tags)
-    // }
+    /// Increment a StatsD counter with rate
+    pub fn rated_incr<I>(&mut self, stat: &str, tags: I, rate: f32) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>
+    {
+        if self.rng.next_f32() < rate {
+            self.incr(stat, tags)
+        } else {
+            Ok(())
+        }
+    }
 
     /// Decrement a StatsD counter
     ///
@@ -210,6 +209,17 @@ impl<'c> Client<'c> {
         self.count(stat, -1, tags)
     }
 
+    /// Rated decrement a StatsD counter
+    pub fn rated_decr<I>(&mut self, stat: &str, tags: I, rate: f32) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>
+    {
+        if self.rng.next_f32() < rate {
+            self.decr(stat, tags)
+        } else {
+            Ok(())
+        }
+    }
+
     /// Measure a StatsD counter
     ///
     /// # Examples
@@ -225,6 +235,18 @@ impl<'c> Client<'c> {
               V: Into<i64>
     {
         self.send(&Metric::Count { stat, val: val.into() }, tags)
+    }
+
+    /// Rated measure a StatsD counter
+    pub fn rated_count<I, V>(&mut self, stat: &str, val: V, tags: I, rate: f32) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>,
+              V: Into<i64>
+    {
+        if self.rng.next_f32() < rate {
+            self.count(stat, val, tags)
+        } else {
+            Ok(())
+        }
     }
 
     /// Time how long it takes for a block of code to execute.
@@ -252,7 +274,7 @@ impl<'c> Client<'c> {
         self.send(&Metric::Timing { stat, val: duration.into() }, tags)
     }
 
-    /// Send your own timing metric in milliseconds
+    /// Send timing metric in milliseconds
     ///
     /// # Examples
     ///
@@ -274,7 +296,19 @@ impl<'c> Client<'c> {
         self.send(&Metric::Timing { stat, val: duration.into() }, tags)
     }
 
-    /// Report an arbitrary value as a gauge
+    /// Rated timing metric in milliseconds
+    pub fn rated_timing<I, V>(&mut self, stat: &str, duration: V, tags: I, rate: f32) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>,
+              V: Into<DurationMeasurement>
+    {
+        if self.rng.next_f32() < rate {
+            self.timing(stat, duration, tags)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Report gauge measurement
     ///
     /// # Examples
     ///
@@ -290,6 +324,18 @@ impl<'c> Client<'c> {
               V: Into<Measurement>
     {
         self.send(&Metric::Gauge { stat, val: val.into() }, tags)
+    }
+
+    /// Rated gauge measurement
+    pub fn rated_gauge<I, V>(&mut self, stat: &str, val: V, tags: I, rate: f32) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>,
+              V: Into<Measurement>
+    {
+        if self.rng.next_f32() < rate {
+            self.gauge(stat, val, tags)
+        } else {
+            Ok(())
+        }
     }
 
     /// Report a value in a histogram
@@ -309,6 +355,18 @@ impl<'c> Client<'c> {
         self.send(&Metric::Histogram { stat, val: val.into() }, tags)
     }
 
+    /// Rated histogram measurement
+    pub fn rated_histogram<I, V>(&mut self, stat: &str, val: V, tags: I, rate: f32) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>,
+              V: Into<Measurement>
+    {
+        if self.rng.next_f32() < rate {
+            self.histogram(stat, val, tags)
+        } else {
+            Ok(())
+        }
+    }
+
     /// Report a value in a distribution
     ///
     /// # Examples
@@ -325,6 +383,18 @@ impl<'c> Client<'c> {
               V: Into<Measurement>
     {
         self.send(&Metric::Distribution { stat, val: val.into() }, tags)
+    }
+
+    /// Rated distribution measurement
+    pub fn rated_distribution<I, V>(&mut self, stat: &str, val: V, tags: I, rate: f32) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>,
+              V: Into<Measurement>
+    {
+        if self.rng.next_f32() < rate {
+            self.distribution(stat, val, tags)
+        } else {
+            Ok(())
+        }
     }
 
     /// Report a value in a set
@@ -432,7 +502,8 @@ mod tests {
                 from_addr: "127.0.0.1:0",
                 to_addr: "127.0.0.1:8125",
                 namespace: "",
-            }
+            },
+            rng: rand::weak_rng(),
         };
 
         assert_eq!(expected_client, client)
