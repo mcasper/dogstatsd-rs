@@ -1,15 +1,24 @@
 
 use std::fmt;
+use std::borrow::Cow;
 use chrono;
 
 pub enum Metric<'a> {
-    Count { stat: Stat<'a>, val: Measurement },
+    // Tracks how many times something happened per second.
+    Count { stat: Stat<'a>, val: i64 },
+    /// Measures the value of a metric at a particular time.
     Gauge { stat: Stat<'a>, val: Measurement },
+    /// Tracks the statistical distribution of a set of values on each host.
     Histogram { stat: Stat<'a>, val: Measurement },
+    /// Tracks the statistical distribution of a set of values across infrastructure.
     Distribution { stat: Stat<'a>, val: Measurement },
-    Set { stat: Stat<'a>, val: Measurement },
+    /// Counts the number of unique elements in a group.
+    Set { stat: Stat<'a>, val: SetMeasurement<'a> },
+    /// Sends timing information.
     Timing { stat: Stat<'a>, val: DurationMeasurement },
+    /// Sends the provided ServiceCheck.
     ServiceCheck { stat: Stat<'a>, val: ServiceStatus, opt: ServiceCheckOptions },
+    /// Sends an event with the provided title and text.
     Event { title: &'a str, text: &'a str },
 }
 
@@ -79,6 +88,7 @@ impl<'a> Metric<'a> {
 
 pub type Stat<'a> = &'a str;
 
+/// Represents most values that can be reported by the client.
 #[derive(Clone, Copy, Debug)]
 pub enum Measurement {
     Int(i64),
@@ -147,6 +157,27 @@ impl From<chrono::Duration> for DurationMeasurement {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct SetMeasurement<'a>(Cow<'a, str>);
+
+impl<'a> fmt::Display for SetMeasurement<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl<'a> From<&'a str> for SetMeasurement<'a> {
+    fn from(value: &'a str) -> SetMeasurement<'a> {
+        SetMeasurement(Cow::Borrowed(value))
+    }
+}
+
+impl<'a> From<u64> for SetMeasurement<'a> {
+    fn from(value: u64) -> SetMeasurement<'a> {
+        SetMeasurement(Cow::Owned(value.to_string()))
+    }
+}
+
 /// Represents the different states a service can be in
 #[derive(Clone, Copy, Debug)]
 pub enum ServiceStatus {
@@ -181,9 +212,8 @@ impl ServiceCheckOptions {
     }
 }
 
-pub fn format_for_send<I, S>(in_metric: &Metric, in_namespace: &str, tags: I) -> Vec<u8>
-    where I: IntoIterator<Item=S>,
-          S: AsRef<str>,
+pub fn format_for_send<I>(in_metric: &Metric, in_namespace: &str, tags: I) -> Vec<u8>
+    where I: IntoIterator, I::Item: AsRef<str>
 {
     let metric = in_metric.metric_type_format();
     let namespace = if in_metric.uses_namespace() {
@@ -312,8 +342,10 @@ mod tests {
     #[test]
     fn test_set_metric() {
         let metric = Metric::Set { stat: "set".into(), val: 13579.into() };
+        assert_eq!("set:13579|s", metric.metric_type_format());
 
-        assert_eq!("set:13579|s", metric.metric_type_format())
+        let metric = Metric::Set { stat: "set".into(), val: "13579".into() };
+        assert_eq!("set:13579|s", metric.metric_type_format());
     }
 
     #[test]

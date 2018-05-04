@@ -1,8 +1,8 @@
 //! A Rust client for interacting with Dogstatsd
 //!
-//! Dogstatsd is a custom `StatsD` implementation by `DataDog` for sending metrics and events to their
-//! system. Through this client you can report any type of metric you want, tag it, and enjoy your
-//! custom metrics.
+//! Dogstatsd is a custom `StatsD` implementation by [Datadog](https://datadog.com) for sending metrics
+//! and events to their system. Through this client you can report any type of metric you want, tag it,
+//! and enjoy your custom metrics.
 //!
 //! ## Usage
 //!
@@ -14,21 +14,20 @@
 //! // Binds to a udp socket on an available ephemeral port on 127.0.0.1 for
 //! // transmitting, and sends to  127.0.0.1:8125, the default dogstatsd
 //! // address.
-//! let default_options = Options::default();
-//! let default_client = Client::new(default_options).unwrap();
+//! let default_client = Client::new();
 //!
 //! // Binds to 127.0.0.1:9000 for transmitting and sends to 10.1.2.3:8125, with a
 //! // namespace of "analytics".
 //! let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics");
-//! let custom_client = Client::new(custom_options).unwrap();
+//! let custom_client = Client::new_with_options(custom_options).unwrap();
 //! ```
 //!
 //! Start sending metrics:
 //!
 //! ```
-//! use dogstatsd::{Client, Options};
+//! use dogstatsd::Client;
 //!
-//! let client = Client::new(Options::default()).unwrap();
+//! let client = Client::new().unwrap();
 //! let tags = &["env:production"];
 //!
 //! // Increment a counter
@@ -46,7 +45,7 @@
 //! client.timing("my_timing", 500, tags).unwrap();
 //!
 //! // Report an arbitrary value (a gauge)
-//! client.gauge("my_gauge", 12.345, tags).unwrap();
+//! client.gauge("my_gauge", 1.2345, tags).unwrap();
 //!
 //! // Report a sample of a histogram
 //! client.histogram("my_histogram", 67890, tags).unwrap();
@@ -55,7 +54,7 @@
 //! client.distribution("distribution", 67890, tags).unwrap();
 //!
 //! // Report a member of a set
-//! client.set("my_set", 13579, tags).unwrap();
+//! client.set("my_set", "13579", tags).unwrap();
 //!
 //! // Send a custom event
 //! client.event("My Custom Event Title", "My Custom Event Body", tags).unwrap();
@@ -115,7 +114,6 @@ impl Default for Options {
             namespace: String::new(),
         }
     }
-
 }
 
 impl Options {
@@ -161,11 +159,24 @@ impl Client {
     /// # Examples
     ///
     /// ```
+    ///   use dogstatsd::Client;
+    ///
+    ///   let client = Client::new().unwrap();
+    /// ```
+    pub fn new() -> Result<Self, DogstatsdError> {
+        Client::new_with_options(Options::default())
+    }
+
+    /// Create a new client from an options struct.
+    ///
+    /// # Examples
+    ///
+    /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
+    ///   let client = Client::new_with_options(Options::default()).unwrap();
     /// ```
-    pub fn new(options: Options) -> Result<Self, DogstatsdError> {
+    pub fn new_with_options(options: Options) -> Result<Self, DogstatsdError> {
         Ok(Client {
             socket: UdpSocket::bind(&options.from_addr)?,
             from_addr: options.from_addr,
@@ -179,17 +190,15 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    ///   use dogstatsd::{Client, Options};
+    ///   use dogstatsd::Client;
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.incr("counter", &["tag:counter"])
-    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   let client = Client::new().unwrap();
+    ///   client.incr("counter", &["tag:counter"]).unwrap();
     /// ```
     pub fn incr<I>(&self, stat: &str, tags: I) -> DogstatsdResult
         where I: IntoIterator, I::Item: AsRef<str>
     {
-        let val = 1;
-        self.send(&Metric::Count { stat, val: val.into() }, tags)
+        self.count(stat, 1, tags)
     }
 
     /// Decrement a StatsD counter
@@ -197,16 +206,31 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    ///   use dogstatsd::{Client, Options};
+    ///   use dogstatsd::Client;
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.decr("counter", &["tag:counter"])
-    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   let client = Client::new().unwrap();
+    ///   client.decr("counter", &["tag:counter"]).unwrap();
     /// ```
     pub fn decr<I>(&self, stat: &str, tags: I) -> DogstatsdResult
         where I: IntoIterator, I::Item: AsRef<str>
     {
-        let val = -1;
+        self.count(stat, -1, tags)
+    }
+
+    /// Measure a StatsD counter
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///   use dogstatsd::Client;
+    ///
+    ///   let client = Client::new().unwrap();
+    ///   client.count("counter", 10, &["tag:counter"]).unwrap();
+    /// ```
+    pub fn count<I, V>(&self, stat: &str, val: V, tags: I) -> DogstatsdResult
+        where I: IntoIterator, I::Item: AsRef<str>,
+              V: Into<i64>
+    {
         self.send(&Metric::Count { stat, val: val.into() }, tags)
     }
 
@@ -215,14 +239,14 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    ///   use dogstatsd::{Client, Options};
+    ///   use dogstatsd::Client;
     ///   use std::thread;
     ///   use std::time::Duration;
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
+    ///   let client = Client::new().unwrap();
     ///   client.time("timer", &["tag:time"], || {
     ///       thread::sleep(Duration::from_millis(200))
-    ///   }).unwrap_or_else(|e| println!("Encountered error: {}", e))
+    ///   }).unwrap();
     /// ```
     pub fn time<I, F>(&self, stat: &str, tags: I, block: F) -> DogstatsdResult
         where I: IntoIterator, I::Item: AsRef<str>,
@@ -243,13 +267,11 @@ impl Client {
     ///   # extern crate chrono;
     ///   # extern crate dogstatsd;
     ///   # fn main() {
-    ///   use dogstatsd::{Client, Options};
+    ///   use dogstatsd::Client;
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.timing("timing", 350, &["tag:timing"])
-    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
-    ///   client.timing("timing", chrono::Duration::seconds(2), &["tag:timing"])
-    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   let client = Client::new().unwrap();
+    ///   client.timing("timing", 350, &["tag:timing"]).unwrap();
+    ///   client.timing("timing", chrono::Duration::seconds(2), &["tag:timing"]).unwrap();
     ///   # }
     /// ```
     pub fn timing<I, V>(&self, stat: &str, duration: V, tags: I) -> DogstatsdResult
@@ -264,13 +286,11 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    ///   use dogstatsd::{Client, Options};
+    ///   use dogstatsd::Client;
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.gauge("gauge", 12345, &["tag:gauge"])
-    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
-    ///   client.gauge("gauge", 123.45, &["tag:gauge"])
-    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   let client = Client::new().unwrap();
+    ///   client.gauge("gauge", 12345, &["tag:gauge"]).unwrap();
+    ///   client.gauge("gauge", 123.45, &["tag:gauge"]).unwrap();
     /// ```
     pub fn gauge<I, V>(&self, stat: &str, val: V, tags: I) -> DogstatsdResult
         where I: IntoIterator, I::Item: AsRef<str>,
@@ -284,11 +304,10 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    ///   use dogstatsd::{Client, Options};
+    ///   use dogstatsd::Client;
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.histogram("histogram", 67.890, &["tag:histogram"])
-    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   let client = Client::new().unwrap();
+    ///   client.histogram("histogram", 67.890, &["tag:histogram"]).unwrap();
     /// ```
     pub fn histogram<I, V>(&self, stat: &str, val: V, tags: I) -> DogstatsdResult
         where I: IntoIterator, I::Item: AsRef<str>,
@@ -302,13 +321,11 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    ///   use dogstatsd::{Client, Options};
+    ///   use dogstatsd::Client;
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.distribution("distribution", 67890, &["tag:distribution"])
-    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
-    ///   client.distribution("distribution", 67.890, &["tag:distribution"])
-    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   let client = Client::new().unwrap();
+    ///   client.distribution("distribution", 67890, &["tag:distribution"]).unwrap();
+    ///   client.distribution("distribution", 67.890, &["tag:distribution"]).unwrap();
     /// ```
     pub fn distribution<I, V>(&self, stat: &str, val: V, tags: I) -> DogstatsdResult
         where I: IntoIterator, I::Item: AsRef<str>,
@@ -322,15 +339,14 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    ///   use dogstatsd::{Client, Options};
+    ///   use dogstatsd::Client;
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.set("set", 13579, &["tag:set"])
-    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   let client = Client::new().unwrap();
+    ///   client.set("set", "13579", &["tag:set"]).unwrap();
     /// ```
-    pub fn set<I, V>(&self, stat: &str, val: V, tags: I) -> DogstatsdResult
+    pub fn set<'a, I, V>(&self, stat: &str, val: V, tags: I) -> DogstatsdResult
         where I: IntoIterator, I::Item: AsRef<str>,
-              V: Into<Measurement>
+              V: Into<SetMeasurement<'a>>
     {
         self.send(&Metric::Set { stat, val: val.into() }, tags)
     }
@@ -340,26 +356,27 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    ///   use dogstatsd::{Client, Options, ServiceStatus, ServiceCheckOptions};
+    ///   use dogstatsd::{Client, ServiceStatus, ServiceCheckOptions};
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.service_check("redis.can_connect", ServiceStatus::OK, &["tag:service"], None)
-    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   let client = Client::new().unwrap();
+    ///   let tags = &["tag:service"];
+    ///   
+    ///   client.service_check("redis.can_connect", ServiceStatus::OK, tags, None).unwrap();
     ///
-    ///   let options = ServiceCheckOptions {
-    ///     hostname: Some("my-host.localhost"),
-    ///     ..Default::default()
-    ///   };
-    ///   client.service_check("redis.can_connect", ServiceStatus::OK, &["tag:service"], Some(options))
-    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   client.service_check("redis.can_connect", ServiceStatus::OK, tags, 
+    ///     Some(ServiceCheckOptions {
+    ///       hostname: Some("my-host.localhost"),
+    ///       ..Default::default()
+    ///     })
+    ///   ).unwrap();
     ///
-    ///   let all_options = ServiceCheckOptions {
-    ///     hostname: Some("my-host.localhost"),
-    ///     timestamp: Some(1510326433),
-    ///     message: Some("Message about the check or service")
-    ///   };
-    ///   client.service_check("redis.can_connect", ServiceStatus::OK, &["tag:service"], Some(all_options))
-    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   client.service_check("redis.can_connect", ServiceStatus::OK, tags, 
+    ///     Some(ServiceCheckOptions {
+    ///       hostname: Some("my-host.localhost"),
+    ///       timestamp: Some(1510326433),
+    ///       message: Some("Message about the check or service")
+    ///     })
+    ///   ).unwrap();
     /// ```
     pub fn service_check<I>(&self, stat: &str, val: ServiceStatus, tags: I, options: Option<ServiceCheckOptions>) -> DogstatsdResult
         where I: IntoIterator, I::Item: AsRef<str>
@@ -373,11 +390,10 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    ///   use dogstatsd::{Client, Options};
+    ///   use dogstatsd::Client;
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.event("Event Title", "Event Body", &["tag:event"])
-    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///   let client = Client::new().unwrap();
+    ///   client.event("Event Title", "Event Body", &["tag:event"]).unwrap();
     /// ```
     pub fn event<I>(&self, title: &str, text: &str, tags: I) -> DogstatsdResult
         where I: IntoIterator, I::Item: AsRef<str>
@@ -412,7 +428,7 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let client = Client::new(Options::default()).unwrap();
+        let client = Client::new().unwrap();
         let expected_client = Client {
             socket: UdpSocket::bind("127.0.0.1:0").unwrap(),
             from_addr: "127.0.0.1:0".into(),
@@ -426,7 +442,7 @@ mod tests {
     #[test]
     fn test_send() {
         let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "");
-        let client = Client::new(options).unwrap();
+        let client = Client::new_with_options(options).unwrap();
         // Shouldn't panic or error
         client.send(&Metric::Gauge { stat: "gauge".into(), val: 1234.into() }, &["tag1", "tag2"]).unwrap();
     }
