@@ -356,6 +356,9 @@ impl Client {
     /// # Examples
     ///
     /// ```
+    ///   # extern crate chrono;
+    ///   # extern crate dogstatsd;
+    ///   # fn main() {
     ///   use dogstatsd::{Client, ServiceStatus, ServiceCheckOptions};
     ///
     ///   let client = Client::new().unwrap();
@@ -373,10 +376,11 @@ impl Client {
     ///   client.service_check("redis.can_connect", ServiceStatus::OK, tags, 
     ///     Some(ServiceCheckOptions {
     ///       hostname: Some("my-host.localhost"),
-    ///       timestamp: Some(1510326433),
+    ///       timestamp: Some(chrono::Utc::now().into()),
     ///       message: Some("Message about the check or service")
     ///     })
     ///   ).unwrap();
+    ///   # }
     /// ```
     pub fn service_check<I>(&self, stat: &str, val: ServiceStatus, tags: I, options: Option<ServiceCheckOptions>) -> DogstatsdResult
         where I: IntoIterator, I::Item: AsRef<str>

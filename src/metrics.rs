@@ -17,7 +17,7 @@ pub enum Metric<'a> {
     /// Sends timing information.
     Timing { stat: Stat<'a>, val: DurationMeasurement },
     /// Sends the provided ServiceCheck.
-    ServiceCheck { stat: Stat<'a>, val: ServiceStatus, opt: ServiceCheckOptions },
+    ServiceCheck { stat: Stat<'a>, val: ServiceStatus, opt: ServiceCheckOptions<'a> },
     /// Sends an event with the provided title and text.
     Event { title: &'a str, text: &'a str },
 }
@@ -43,23 +43,12 @@ impl<'a> Metric<'a> {
             Set { stat, val }           => format!("{}:{}|s", stat, val),
             Timing { stat, val }        => format!("{}:{}|ms", stat, val),
             
-            Event { title, text } => {
-                let title_len = title.len().to_string();
-                let text_len = text.len().to_string();
-                let mut buf = String::with_capacity(title.len() + text.len() + title_len.len() + text_len.len() + 6);
-                buf.push_str("_e{");
-                buf.push_str(&title_len);
-                buf.push_str(",");
-                buf.push_str(&text_len);
-                buf.push_str("}:");
-                buf.push_str(title);
-                buf.push_str("|");
-                buf.push_str(text);
-                buf
-            }
+            Event { title, text } =>
+                format!("_e{{{},{}}}:{}|{}", title.len(), text.len(), title, text),
             
             ServiceCheck { stat, val, opt } => {
                 let mut buf = String::with_capacity(6 + stat.len() + opt.len());
+
                 buf.push_str("_sc|");
                 buf.push_str(stat);
                 buf.push_str("|");
@@ -157,6 +146,12 @@ impl From<chrono::Duration> for DurationMeasurement {
     }
 }
 
+impl<'a> From<&'a chrono::Duration> for DurationMeasurement {
+    fn from(value: &'a chrono::Duration) -> DurationMeasurement {
+        DurationMeasurement(Measurement::Int(value.num_milliseconds()))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct SetMeasurement<'a>(Cow<'a, str>);
 
@@ -178,7 +173,7 @@ impl<'a> From<u64> for SetMeasurement<'a> {
     }
 }
 
-/// Represents the different states a service can be in
+/// The different states a service can be in
 #[derive(Clone, Copy, Debug)]
 pub enum ServiceStatus {
     /// OK State
@@ -191,18 +186,46 @@ pub enum ServiceStatus {
     Unknown = 3,
 }
 
-/// Struct for adding optional pieces to a service check
-#[derive(Clone, Copy, Debug, Default)]
-pub struct ServiceCheckOptions {
-    /// An optional timestamp to include with the check
-    pub timestamp: Option<i32>,
-    /// An optional hostname to include with the check
-    pub hostname: Option<&'static str>,
-    /// An optional message to include with the check
-    pub message: Option<&'static str>,
+/// A UTC timestamp
+#[derive(Clone, Copy, Debug)]
+pub struct Timestamp(i64);
+
+impl fmt::Display for Timestamp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
-impl ServiceCheckOptions {
+impl From<i64> for Timestamp {
+    fn from(value: i64) -> Timestamp {
+        Timestamp(value)
+    }
+}
+
+impl From<chrono::DateTime<chrono::Utc>> for Timestamp {
+    fn from(value: chrono::DateTime<chrono::Utc>) -> Timestamp {
+        Timestamp(value.timestamp())
+    }
+}
+
+impl<'a> From<&'a chrono::DateTime<chrono::Utc>> for Timestamp {
+    fn from(value: &'a chrono::DateTime<chrono::Utc>) -> Timestamp {
+        Timestamp(value.timestamp())
+    }
+}
+
+/// Struct for adding optional pieces to a service check
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ServiceCheckOptions<'a> {
+    /// An optional timestamp to include with the check
+    pub timestamp: Option<Timestamp>,
+    /// An optional hostname to include with the check
+    pub hostname: Option<&'a str>,
+    /// An optional message to include with the check
+    pub message: Option<&'a str>,
+}
+
+impl<'a> ServiceCheckOptions<'a> {
     fn len(&self) -> usize {
         let mut length = 0;
         length += self.timestamp.map_or(0, |ts| format!("{}", ts).len() + 3);
@@ -358,7 +381,7 @@ mod tests {
     #[test]
     fn test_service_check_with_timestamp() {
         let opt = ServiceCheckOptions {
-            timestamp: Some(1234567890),
+            timestamp: Some(1234567890.into()),
             ..Default::default()
         };
         let metric = Metric::ServiceCheck { stat: "redis.can_connect".into(), val: ServiceStatus::Warning, opt };
@@ -391,7 +414,7 @@ mod tests {
     #[test]
     fn test_service_check_with_all() {
         let opt = ServiceCheckOptions {
-            timestamp: Some(1234567890),
+            timestamp: Some(1234567890.into()),
             hostname: Some("my_server.localhost"),
             message: Some("Service is possibly down")
         };
