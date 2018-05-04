@@ -57,7 +57,7 @@
 //! client.set("my_set", "13579", tags).unwrap();
 //!
 //! // Send a custom event
-//! client.event("My Custom Event Title", "My Custom Event Body", tags).unwrap();
+//! client.event("My Custom Event Title", "My Custom Event Body", tags, None).unwrap();
 //! ```
 
 #![cfg_attr(feature = "unstable", feature(test))]
@@ -445,11 +445,11 @@ impl<'c> Client<'c> {
     ///   ).unwrap();
     ///   # }
     /// ```
-    pub fn service_check<I>(&self, stat: &str, val: ServiceStatus, tags: I, options: Option<ServiceCheckOptions>) -> DogstatsdResult
+    pub fn service_check<I>(&self, stat: &str, status: ServiceStatus, tags: I, options: Option<ServiceCheckOptions>) -> DogstatsdResult
         where I: IntoIterator, I::Item: AsRef<str>
     {
         let opt = options.unwrap_or(ServiceCheckOptions::default());
-        self.send(&Metric::ServiceCheck { stat, val, opt }, tags)
+        self.send(&Metric::ServiceCheck { stat, status, opt }, tags)
     }
 
     /// Send a custom event as a title and a body
@@ -460,12 +460,13 @@ impl<'c> Client<'c> {
     ///   use dogstatsd::Client;
     ///
     ///   let client = Client::new().unwrap();
-    ///   client.event("Event Title", "Event Body", &["tag:event"]).unwrap();
+    ///   client.event("Event Title", "Event Body", &["tag:event"], None).unwrap();
     /// ```
-    pub fn event<I>(&self, title: &str, text: &str, tags: I) -> DogstatsdResult
+    pub fn event<I>(&self, title: &str, text: &str, tags: I, options: Option<EventOptions>) -> DogstatsdResult
         where I: IntoIterator, I::Item: AsRef<str>
     {
-        self.send(&Metric::Event { title, text }, tags)
+        let opt = options.unwrap_or(EventOptions::default());
+        self.send(&Metric::Event { title, text, opt }, tags)
     }
 
     fn send<I>(&self, metric: &Metric, tags: I) -> DogstatsdResult

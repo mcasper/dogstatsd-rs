@@ -17,9 +17,9 @@ pub enum Metric<'a> {
     /// Sends timing information.
     Timing { stat: Stat<'a>, val: DurationMeasurement },
     /// Sends the provided ServiceCheck.
-    ServiceCheck { stat: Stat<'a>, val: ServiceStatus, opt: ServiceCheckOptions<'a> },
+    ServiceCheck { stat: Stat<'a>, status: ServiceStatus, opt: ServiceCheckOptions<'a> },
     /// Sends an event with the provided title and text.
-    Event { title: &'a str, text: &'a str },
+    Event { title: &'a str, text: &'a str, opt: EventOptions<'a> },
 }
 
 impl<'a> Metric<'a> {
@@ -43,30 +43,55 @@ impl<'a> Metric<'a> {
             Set { stat, val }           => format!("{}:{}|s", stat, val),
             Timing { stat, val }        => format!("{}:{}|ms", stat, val),
             
-            Event { title, text } =>
-                format!("_e{{{},{}}}:{}|{}", title.len(), text.len(), title, text),
+            Event { title, text, opt } => {
+
+                let mut buf = format!("_e{{{},{}}}:{}|{}", title.len(), text.len(), title, text);
+
+                if let Some(timestamp) = opt.timestamp {
+                    buf.push_str(&format!("|d:{}", timestamp));
+                }
+
+                if let Some(hostname) = opt.hostname {
+                    buf.push_str(&format!("|h:{}", hostname));
+                }
+
+                if let Some(aggregation_key) = opt.aggregation_key {
+                    buf.push_str(&format!("|k:{}", aggregation_key));
+                }
+
+                if let Some(priority) = opt.priority {
+                    buf.push_str(&format!("|p:{}", priority));
+                }
+
+                if let Some(source_type) = opt.source_type {
+                    buf.push_str(&format!("|s:{}", source_type));
+                }
+
+                if let Some(alert_type) = opt.alert_type {
+                    buf.push_str(&format!("|t:{}", alert_type));
+                }
+
+                buf
+            }
             
-            ServiceCheck { stat, val, opt } => {
+            ServiceCheck { stat, status, opt } => {
                 let mut buf = String::with_capacity(6 + stat.len() + opt.len());
 
                 buf.push_str("_sc|");
                 buf.push_str(stat);
                 buf.push_str("|");
-                buf.push_str(&format!("{}", *val as u8));
+                buf.push_str(&format!("{}", *status as u8));
 
                 if let Some(timestamp) = opt.timestamp {
-                    buf.push_str("|d:");
-                    buf.push_str(&format!("{}", timestamp));
+                    buf.push_str(&format!("|d:{}", timestamp));
                 }
 
                 if let Some(hostname) = opt.hostname {
-                    buf.push_str("|h:");
-                    buf.push_str(hostname);
+                    buf.push_str(&format!("|h:{}", hostname));
                 }
 
                 if let Some(message) = opt.message {
-                    buf.push_str("|m:");
-                    buf.push_str(message);
+                    buf.push_str(&format!("|m:{}", message));
                 }
 
                 buf
@@ -235,6 +260,53 @@ impl<'a> ServiceCheckOptions<'a> {
     }
 }
 
+/// Struct for adding optional pieces for an event
+#[derive(Clone, Copy, Debug, Default)]
+pub struct EventOptions<'a> {
+    pub timestamp: Option<Timestamp>,
+    pub hostname: Option<&'a str>,
+    pub aggregation_key: Option<&'a str>,
+    pub priority: Option<EventPriority>,
+    pub source_type: Option<&'a str>,
+    pub alert_type: Option<EventAlertType>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum EventPriority {
+    Normal,
+    Low,
+}
+
+impl fmt::Display for EventPriority {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use EventPriority::*;
+        write!(f, "{}", match self {
+            Normal => "normal",
+            Low => "low",
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum EventAlertType {
+    Info,
+    Error,
+    Warning,
+    Success,
+}
+
+impl fmt::Display for EventAlertType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use EventAlertType::*;
+        write!(f, "{}", match self {
+            Info => "info",
+            Error => "error",
+            Warning => "warning",
+            Success => "success",
+        })
+    }
+}
+
 pub fn format_for_send<I>(in_metric: &Metric, in_namespace: &str, tags: I) -> Vec<u8>
     where I: IntoIterator, I::Item: AsRef<str>
 {
@@ -282,7 +354,7 @@ mod tests {
     fn test_format_for_send_no_tags() {
         assert_eq!(
             &b"namespace.foo:1|c"[..],
-            &format_for_send(&Metric::Count { stat: "foo".into(), val: 1.into() }, "namespace", &[] as &[String])[..]
+            &format_for_send(&Metric::Count { stat: "foo", val: 1.into() }, "namespace", &[] as &[String])[..]
         )
     }
 
@@ -290,7 +362,7 @@ mod tests {
     fn test_format_for_send_no_namespace() {
         assert_eq!(
             &b"foo:1|c|#tag:1,tag:2"[..],
-            &format_for_send(&Metric::Count { stat: "foo".into(), val: 1.into() }, "", &["tag:1", "tag:2"])[..]
+            &format_for_send(&Metric::Count { stat: "foo", val: 1.into() }, "", &["tag:1", "tag:2"])[..]
         )
     }
 
@@ -298,7 +370,7 @@ mod tests {
     fn test_format_for_send_everything() {
         assert_eq!(
             &b"namespace.foo:1|c|#tag:1,tag:2"[..],
-            &format_for_send(&Metric::Count { stat: "foo".into(), val: 1.into() }, "namespace", &["tag:1", "tag:2"])[..]
+            &format_for_send(&Metric::Count { stat: "foo", val: 1.into() }, "namespace", &["tag:1", "tag:2"])[..]
         )
     }
 
@@ -306,20 +378,20 @@ mod tests {
     fn test_format_for_send_everything_omit_namespace() {
         assert_eq!(
             &b"_e{5,4}:title|text|#tag:1,tag:2"[..],
-            &format_for_send(&Metric::Event { title: "title".into(), text: "text".into() }, "namespace", &["tag:1", "tag:2"])[..]
+            &format_for_send(&Metric::Event { title: "title", text: "text", opt: EventOptions::default() }, "namespace", &["tag:1", "tag:2"])[..]
         )
     }
 
     #[test]
     fn test_count_incr_metric() {
-        let metric = Metric::Count { stat: "incr".into(), val: 1.into() };
+        let metric = Metric::Count { stat: "incr", val: 1.into() };
 
         assert_eq!("incr:1|c", metric.metric_type_format())
     }
 
     #[test]
     fn test_count_decr_metric() {
-        let metric = Metric::Count { stat: "decr".into(), val: (-1).into() };
+        let metric = Metric::Count { stat: "decr", val: (-1).into() };
 
         assert_eq!("decr:-1|c", metric.metric_type_format())
     }
@@ -329,51 +401,51 @@ mod tests {
         let start_time = Utc.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 0);
         let end_time = Utc.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 900);
         let duration = end_time.signed_duration_since(start_time);
-        let metric = Metric::Timing { stat: "time".into(), val: duration.into() };
+        let metric = Metric::Timing { stat: "time", val: duration.into() };
 
         assert_eq!("time:900|ms", metric.metric_type_format())
     }
 
     #[test]
     fn test_timing_metric() {
-        let metric = Metric::Timing { stat: "timing".into(), val: 720.into() };
+        let metric = Metric::Timing { stat: "timing", val: 720.into() };
 
         assert_eq!("timing:720|ms", metric.metric_type_format())
     }
 
     #[test]
     fn test_gauge_metric() {
-        let metric = Metric::Gauge { stat: "gauge".into(), val: 12345.into() };
+        let metric = Metric::Gauge { stat: "gauge", val: 12345.into() };
 
         assert_eq!("gauge:12345|g", metric.metric_type_format())
     }
 
     #[test]
     fn test_histogram_metric() {
-        let metric = Metric::Histogram { stat: "histogram".into(), val: 67890.into() };
+        let metric = Metric::Histogram { stat: "histogram", val: 67890.into() };
 
         assert_eq!("histogram:67890|h", metric.metric_type_format())
     }
 
     #[test]
     fn test_distribution_metric() {
-        let metric = Metric::Distribution { stat: "distribution".into(), val: 67890.into() };
+        let metric = Metric::Distribution { stat: "distribution", val: 67890.into() };
 
         assert_eq!("distribution:67890|d", metric.metric_type_format())
     }
 
     #[test]
     fn test_set_metric() {
-        let metric = Metric::Set { stat: "set".into(), val: 13579.into() };
+        let metric = Metric::Set { stat: "set", val: 13579.into() };
         assert_eq!("set:13579|s", metric.metric_type_format());
 
-        let metric = Metric::Set { stat: "set".into(), val: "13579".into() };
+        let metric = Metric::Set { stat: "set", val: "13579".into() };
         assert_eq!("set:13579|s", metric.metric_type_format());
     }
 
     #[test]
     fn test_service_check() {
-        let metric = Metric::ServiceCheck { stat: "redis.can_connect".into(), val: ServiceStatus::Warning, opt: ServiceCheckOptions::default() };
+        let metric = Metric::ServiceCheck { stat: "redis.can_connect", status: ServiceStatus::Warning, opt: ServiceCheckOptions::default() };
 
         assert_eq!("_sc|redis.can_connect|1", metric.metric_type_format())
     }
@@ -384,7 +456,7 @@ mod tests {
             timestamp: Some(1234567890.into()),
             ..Default::default()
         };
-        let metric = Metric::ServiceCheck { stat: "redis.can_connect".into(), val: ServiceStatus::Warning, opt };
+        let metric = Metric::ServiceCheck { stat: "redis.can_connect", status: ServiceStatus::Warning, opt };
 
         assert_eq!("_sc|redis.can_connect|1|d:1234567890", metric.metric_type_format())
     }
@@ -395,7 +467,7 @@ mod tests {
             hostname: Some("my_server.localhost"),
             ..Default::default()
         };
-        let metric = Metric::ServiceCheck { stat: "redis.can_connect".into(), val: ServiceStatus::Warning, opt };
+        let metric = Metric::ServiceCheck { stat: "redis.can_connect", status: ServiceStatus::Warning, opt };
 
         assert_eq!("_sc|redis.can_connect|1|h:my_server.localhost", metric.metric_type_format())
     }
@@ -406,7 +478,7 @@ mod tests {
             message: Some("Service is possibly down"),
             ..Default::default()
         };
-        let metric = Metric::ServiceCheck { stat: "redis.can_connect".into(), val: ServiceStatus::Warning, opt };
+        let metric = Metric::ServiceCheck { stat: "redis.can_connect", status: ServiceStatus::Warning, opt };
 
         assert_eq!("_sc|redis.can_connect|1|m:Service is possibly down", metric.metric_type_format())
     }
@@ -418,7 +490,7 @@ mod tests {
             hostname: Some("my_server.localhost"),
             message: Some("Service is possibly down")
         };
-        let metric = Metric::ServiceCheck { stat: "redis.can_connect".into(), val: ServiceStatus::Warning, opt };
+        let metric = Metric::ServiceCheck { stat: "redis.can_connect", status: ServiceStatus::Warning, opt };
 
         assert_eq!(
             "_sc|redis.can_connect|1|d:1234567890|h:my_server.localhost|m:Service is possibly down",
@@ -428,12 +500,32 @@ mod tests {
 
     #[test]
     fn test_event() {
-        let metric = Metric::Event { title: "Event Title".into(), text: "Event Body - Something Happened".into() };
-
+        let metric = Metric::Event { 
+            title: "Event Title",
+            text: "Event Body - Something Happened",
+            opt: EventOptions::default() 
+        };
         assert_eq!(
             "_e{11,31}:Event Title|Event Body - Something Happened",
             metric.metric_type_format()
-        )
+        );
+
+        let metric = Metric::Event { 
+            title: "Event Title",
+            text: "Event Body - Something Happened",
+            opt: EventOptions {
+                timestamp: Some(1234567890.into()),
+                hostname: Some("localhost"),
+                aggregation_key: Some("key"),
+                priority: Some(EventPriority::Low),
+                source_type: Some("alert source"),
+                alert_type: Some(EventAlertType::Warning),
+            }
+        };
+        assert_eq!(
+            "_e{11,31}:Event Title|Event Body - Something Happened|d:1234567890|h:localhost|k:key|p:low|s:alert source|t:warning",
+            metric.metric_type_format()
+        );
     }
 }
 
