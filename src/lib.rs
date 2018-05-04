@@ -191,7 +191,7 @@ impl Client {
               S: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        self.send(&CountMetric::Incr(stat.into().borrow()), tags)
+        self.send(&Metric::Count { stat: stat.into().borrow(), val: 1.into() }, tags)
     }
 
     /// Decrement a StatsD counter
@@ -210,7 +210,7 @@ impl Client {
               S: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        self.send(&CountMetric::Decr(stat.into().borrow()), tags)
+        self.send(&Metric::Count { stat: stat.into().borrow(), val: (-1).into() }, tags)
     }
 
     /// Time how long it takes for a block of code to execute.
@@ -233,10 +233,11 @@ impl Client {
               S: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        let ref start_time = Utc::now();
+        let start_time = Utc::now();
         block();
-        let ref end_time = Utc::now();
-        self.send(&TimeMetric { stat: stat.into().borrow(), start_time, end_time }, tags)
+        let end_time = Utc::now();
+        let duration = end_time.signed_duration_since(start_time);
+        self.send(&Metric::Timing { stat: stat.into().borrow(), val: duration.into() }, tags)
     }
 
     /// Send your own timing metric in milliseconds
@@ -259,10 +260,10 @@ impl Client {
     pub fn timing<'a, I, S, V, T>(&self, stat: S, duration: V, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
-              V: DurationMeasure,
+              V: Into<DurationMeasurement>,
               T: AsRef<str>,
     {
-        self.send(&TimingMetric { stat: stat.into().borrow(), ms: duration.as_milliseconds() }, tags)
+        self.send(&Metric::Timing { stat: stat.into().borrow(), val: duration.into() }, tags)
     }
 
     /// Report an arbitrary value as a gauge
@@ -284,7 +285,7 @@ impl Client {
               T: AsRef<str>,
               V: Into<Measurement>,
     {
-        self.send(&GaugeMetric { stat: stat.into().borrow(), val: val.into() }, tags)
+        self.send(&Metric::Gauge { stat: stat.into().borrow(), val: val.into() }, tags)
     }
 
     /// Report a value in a histogram
@@ -304,7 +305,7 @@ impl Client {
               V: Into<Measurement>,
               T: AsRef<str>,
     {
-        self.send(&HistogramMetric { stat: stat.into().borrow(), val: val.into() }, tags)
+        self.send(&Metric::Histogram { stat: stat.into().borrow(), val: val.into() }, tags)
     }
 
     /// Report a value in a distribution
@@ -326,7 +327,7 @@ impl Client {
               V: Into<Measurement>,
               T: AsRef<str>,
     {
-        self.send(&DistributionMetric { stat: stat.into().borrow(), val: val.into() }, tags)
+        self.send(&Metric::Distribution { stat: stat.into().borrow(), val: val.into() }, tags)
     }
 
     /// Report a value in a set
@@ -346,7 +347,7 @@ impl Client {
               V: Into<Measurement>,
               T: AsRef<str>,
     {
-        self.send(&SetMetric { stat: stat.into().borrow(), val: val.into() }, tags)
+        self.send(&Metric::Set { stat: stat.into().borrow(), val: val.into() }, tags)
     }
 
     /// Report the status of a service
@@ -380,8 +381,8 @@ impl Client {
               S: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        let options = options.unwrap_or(ServiceCheckOptions::default());
-        self.send(&ServiceCheck { stat: stat.into().borrow(), val, options }, tags)
+        let opt = options.unwrap_or(ServiceCheckOptions::default());
+        self.send(&Metric::ServiceCheck { stat: stat.into().borrow(), val, opt }, tags)
     }
 
     /// Send a custom event as a title and a body
@@ -401,60 +402,16 @@ impl Client {
               SS: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        self.send(&Event::new(title.into().borrow(), text.into().borrow()), tags)
+        self.send(&Metric::Event { title: title.into().borrow(), text: text.into().borrow() }, tags)
     }
 
-    fn send<I, M, S>(&self, metric: &M, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=S>,
-              M: Metric,
-              S: AsRef<str>,
+    fn send<I, T>(&self, metric: &Metric, tags: I) -> DogstatsdResult
+        where I: IntoIterator<Item=T>,
+              T: AsRef<str>,
     {
         let formatted_metric = format_for_send(metric, &self.namespace, tags);
         self.socket.send_to(formatted_metric.as_slice(), &self.to_addr)?;
         Ok(())
-    }
-}
-
-/// General measurement types
-pub trait Measure<'a> {
-    /// Format measurement into str
-    fn to_cow(&self) -> Cow<'a, str>;
-}
-
-impl<'a> Measure<'a> for i64 {
-    fn to_cow(&self) -> Cow<'a, str> {
-        Cow::from(format!("{:.6}", self))
-    }
-}
-
-impl<'a> Measure<'a> for f64 {
-    fn to_cow(&self) -> Cow<'a, str> {
-        Cow::from(format!("{:.6}", self))
-    }
-}
-
-/// Duration types
-pub trait DurationMeasure {
-    /// Return duration as milliseconds
-    fn as_milliseconds(&self) -> i64;
-}
-
-impl DurationMeasure for i64 {
-    fn as_milliseconds(&self) -> i64 {
-        *self
-    }
-}
-
-impl DurationMeasure for std::time::Duration {
-    fn as_milliseconds(&self) -> i64 {
-        // TODO this ignores subseconds in the duration
-        self.as_secs() as i64 * 1000
-    }
-}
-
-impl DurationMeasure for chrono::Duration {
-    fn as_milliseconds(&self) -> i64 {
-        self.num_milliseconds()
     }
 }
 
@@ -487,13 +444,12 @@ mod tests {
         assert_eq!(expected_client, client)
     }
 
-    use metrics::GaugeMetric;
     #[test]
     fn test_send() {
         let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "");
         let client = Client::new(options).unwrap();
         // Shouldn't panic or error
-        client.send(&GaugeMetric { stat: "gauge".into(), val: 1234.into() }, &["tag1", "tag2"]).unwrap();
+        client.send(&Metric::Gauge { stat: "gauge".into(), val: 1234.into() }, &["tag1", "tag2"]).unwrap();
     }
 }
 
