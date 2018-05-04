@@ -187,7 +187,7 @@ impl<'c> Client<'c> {
         where I: IntoIterator, I::Item: AsRef<str>
     {
         if self.rng.next_f32() < rate {
-            self.incr(stat, tags)
+            self.rated_count(stat, 1, tags, rate)
         } else {
             Ok(())
         }
@@ -214,7 +214,7 @@ impl<'c> Client<'c> {
         where I: IntoIterator, I::Item: AsRef<str>
     {
         if self.rng.next_f32() < rate {
-            self.decr(stat, tags)
+            self.rated_count(stat, -1, tags, rate)
         } else {
             Ok(())
         }
@@ -234,7 +234,7 @@ impl<'c> Client<'c> {
         where I: IntoIterator, I::Item: AsRef<str>,
               V: Into<i64>
     {
-        self.send(&Metric::Count { stat, val: val.into() }, tags)
+        self.send(&Metric::Count { stat, val: val.into() }, tags, None)
     }
 
     /// Rated measure a StatsD counter
@@ -243,7 +243,7 @@ impl<'c> Client<'c> {
               V: Into<i64>
     {
         if self.rng.next_f32() < rate {
-            self.count(stat, val, tags)
+            self.send(&Metric::Count { stat, val: val.into() }, tags, Some(rate))
         } else {
             Ok(())
         }
@@ -271,7 +271,7 @@ impl<'c> Client<'c> {
         block();
         let end_time = Utc::now();
         let duration = end_time.signed_duration_since(start_time);
-        self.send(&Metric::Timing { stat, val: duration.into() }, tags)
+        self.send(&Metric::Timing { stat, val: duration.into() }, tags, None)
     }
 
     /// Send timing metric in milliseconds
@@ -293,7 +293,7 @@ impl<'c> Client<'c> {
         where I: IntoIterator, I::Item: AsRef<str>,
               V: Into<DurationMeasurement>
     {
-        self.send(&Metric::Timing { stat, val: duration.into() }, tags)
+        self.send(&Metric::Timing { stat, val: duration.into() }, tags, None)
     }
 
     /// Rated timing metric in milliseconds
@@ -302,7 +302,7 @@ impl<'c> Client<'c> {
               V: Into<DurationMeasurement>
     {
         if self.rng.next_f32() < rate {
-            self.timing(stat, duration, tags)
+            self.send(&Metric::Timing { stat, val: duration.into() }, tags, Some(rate))
         } else {
             Ok(())
         }
@@ -323,7 +323,7 @@ impl<'c> Client<'c> {
         where I: IntoIterator, I::Item: AsRef<str>,
               V: Into<Measurement>
     {
-        self.send(&Metric::Gauge { stat, val: val.into() }, tags)
+        self.send(&Metric::Gauge { stat, val: val.into() }, tags, None)
     }
 
     /// Rated gauge measurement
@@ -332,7 +332,7 @@ impl<'c> Client<'c> {
               V: Into<Measurement>
     {
         if self.rng.next_f32() < rate {
-            self.gauge(stat, val, tags)
+            self.send(&Metric::Gauge { stat, val: val.into() }, tags, Some(rate))
         } else {
             Ok(())
         }
@@ -352,7 +352,7 @@ impl<'c> Client<'c> {
         where I: IntoIterator, I::Item: AsRef<str>,
               V: Into<Measurement>
     {
-        self.send(&Metric::Histogram { stat, val: val.into() }, tags)
+        self.send(&Metric::Histogram { stat, val: val.into() }, tags, None)
     }
 
     /// Rated histogram measurement
@@ -361,7 +361,7 @@ impl<'c> Client<'c> {
               V: Into<Measurement>
     {
         if self.rng.next_f32() < rate {
-            self.histogram(stat, val, tags)
+            self.send(&Metric::Histogram { stat, val: val.into() }, tags, Some(rate))
         } else {
             Ok(())
         }
@@ -382,7 +382,7 @@ impl<'c> Client<'c> {
         where I: IntoIterator, I::Item: AsRef<str>,
               V: Into<Measurement>
     {
-        self.send(&Metric::Distribution { stat, val: val.into() }, tags)
+        self.send(&Metric::Distribution { stat, val: val.into() }, tags, None)
     }
 
     /// Rated distribution measurement
@@ -391,7 +391,7 @@ impl<'c> Client<'c> {
               V: Into<Measurement>
     {
         if self.rng.next_f32() < rate {
-            self.distribution(stat, val, tags)
+            self.send(&Metric::Distribution { stat, val: val.into() }, tags, Some(rate))
         } else {
             Ok(())
         }
@@ -411,7 +411,7 @@ impl<'c> Client<'c> {
         where I: IntoIterator, I::Item: AsRef<str>,
               V: Into<SetMeasurement<'a>>
     {
-        self.send(&Metric::Set { stat, val: val.into() }, tags)
+        self.send(&Metric::Set { stat, val: val.into() }, tags, None)
     }
 
     /// Report the status of a service
@@ -449,7 +449,7 @@ impl<'c> Client<'c> {
         where I: IntoIterator, I::Item: AsRef<str>
     {
         let opt = options.unwrap_or(ServiceCheckOptions::default());
-        self.send(&Metric::ServiceCheck { stat, status, opt }, tags)
+        self.send(&Metric::ServiceCheck { stat, status, opt }, tags, None)
     }
 
     /// Send a custom event as a title and a body
@@ -466,13 +466,13 @@ impl<'c> Client<'c> {
         where I: IntoIterator, I::Item: AsRef<str>
     {
         let opt = options.unwrap_or(EventOptions::default());
-        self.send(&Metric::Event { title, text, opt }, tags)
+        self.send(&Metric::Event { title, text, opt }, tags, None)
     }
 
-    fn send<I>(&self, metric: &Metric, tags: I) -> DogstatsdResult
+    fn send<I>(&self, metric: &Metric, tags: I, rate: Option<f32>) -> DogstatsdResult
         where I: IntoIterator, I::Item: AsRef<str>
     {
-        let formatted_metric = format_for_send(metric, &self.options.namespace, tags);
+        let formatted_metric = format_for_send(metric, &self.options.namespace, tags, rate);
         self.socket.send_to(formatted_metric.as_slice(), &self.options.to_addr)?;
         Ok(())
     }
@@ -515,7 +515,7 @@ mod tests {
         let options = Options { from_addr: "127.0.0.1:9001", to_addr: "127.0.0.1:9002", namespace: "" };
         let client = Client::new_with_options(options).unwrap();
         // Shouldn't panic or error
-        client.send(&Metric::Gauge { stat: "gauge", val: 1234.into() }, &["tag1", "tag2"]).unwrap();
+        client.send(&Metric::Gauge { stat: "gauge", val: 1234.into() }, &["tag1", "tag2"], None).unwrap();
     }
 }
 

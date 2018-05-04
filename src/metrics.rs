@@ -307,7 +307,7 @@ impl fmt::Display for EventAlertType {
     }
 }
 
-pub fn format_for_send<I>(in_metric: &Metric, in_namespace: &str, tags: I) -> Vec<u8>
+pub fn format_for_send<I>(in_metric: &Metric, in_namespace: &str, tags: I, rate: Option<f32>) -> Vec<u8>
     where I: IntoIterator, I::Item: AsRef<str>
 {
     let metric = in_metric.metric_type_format();
@@ -342,6 +342,10 @@ pub fn format_for_send<I>(in_metric: &Metric, in_namespace: &str, tags: I) -> Ve
         }
     }
 
+    if let Some(rate) = rate {
+        buf.extend_from_slice(format!("|@{:.6}", rate).as_bytes());
+    }
+
     buf
 }
 
@@ -354,7 +358,7 @@ mod tests {
     fn test_format_for_send_no_tags() {
         assert_eq!(
             &b"namespace.foo:1|c"[..],
-            &format_for_send(&Metric::Count { stat: "foo", val: 1.into() }, "namespace", &[] as &[String])[..]
+            &format_for_send(&Metric::Count { stat: "foo", val: 1.into() }, "namespace", &[] as &[String], None)[..]
         )
     }
 
@@ -362,7 +366,7 @@ mod tests {
     fn test_format_for_send_no_namespace() {
         assert_eq!(
             &b"foo:1|c|#tag:1,tag:2"[..],
-            &format_for_send(&Metric::Count { stat: "foo", val: 1.into() }, "", &["tag:1", "tag:2"])[..]
+            &format_for_send(&Metric::Count { stat: "foo", val: 1.into() }, "", &["tag:1", "tag:2"], None)[..]
         )
     }
 
@@ -370,7 +374,7 @@ mod tests {
     fn test_format_for_send_everything() {
         assert_eq!(
             &b"namespace.foo:1|c|#tag:1,tag:2"[..],
-            &format_for_send(&Metric::Count { stat: "foo", val: 1.into() }, "namespace", &["tag:1", "tag:2"])[..]
+            &format_for_send(&Metric::Count { stat: "foo", val: 1.into() }, "namespace", &["tag:1", "tag:2"], None)[..]
         )
     }
 
@@ -378,7 +382,15 @@ mod tests {
     fn test_format_for_send_everything_omit_namespace() {
         assert_eq!(
             &b"_e{5,4}:title|text|#tag:1,tag:2"[..],
-            &format_for_send(&Metric::Event { title: "title", text: "text", opt: EventOptions::default() }, "namespace", &["tag:1", "tag:2"])[..]
+            &format_for_send(&Metric::Event { title: "title", text: "text", opt: EventOptions::default() }, "namespace", &["tag:1", "tag:2"], None)[..]
+        )
+    }
+
+    #[test]
+    fn test_format_for_rate() {
+        assert_eq!(
+            &b"namespace.foo:1|c|#tag:1,tag:2|@0.500000"[..],
+            &format_for_send(&Metric::Count { stat: "foo", val: 1.into() }, "namespace", &["tag:1", "tag:2"], Some(0.5))[..]
         )
     }
 
