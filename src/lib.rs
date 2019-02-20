@@ -576,8 +576,13 @@ mod bench {
         let options = Options::default();
         let client = Client::new(options).unwrap();
         let tags = vec!["name1:value1"];
+        let all_options = ServiceCheckOptions {
+            hostname: Some("my-host.localhost"),
+            timestamp: Some(1510326433),
+            message: Some("Message about the check or service")
+        };
         b.iter(|| {
-            client.service_check("bench.service_check", ServiceStatus::Critical, &tags).unwrap();
+            client.service_check("bench.service_check", ServiceStatus::Critical, &tags, Some(all_options)).unwrap();
         })
     }
 

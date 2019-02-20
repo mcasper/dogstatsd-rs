@@ -540,13 +540,22 @@ mod bench {
     use self::test::Bencher;
     use super::*;
 
-    #[bench]
-    fn bench_format_for_send(b: &mut Bencher) {
-        b.iter(|| {
-            format_for_send("metric", "foo", &["bar", "baz"]);
-        })
+    struct NullMetric;
+
+    impl Metric for NullMetric {
+        fn metric_type_format(&self) -> String {
+            String::new()
+        }
     }
 
+    #[bench]
+    fn bench_format_for_send(b: &mut Bencher) {
+        let metric = NullMetric;
+
+        b.iter(|| {
+            format_for_send(&metric, "foo", &["bar", "baz"]);
+        })
+    }
 
     #[bench]
     fn bench_set_metric(b: &mut Bencher) {
