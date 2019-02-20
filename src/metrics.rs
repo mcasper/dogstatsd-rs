@@ -65,7 +65,7 @@ impl<'a> Metric for CountMetric<'a> {
                 buf
             },
             CountMetric::Decr(stat) => {
-                let mut buf = String::with_capacity(3 + stat.len() + 4);
+                let mut buf = String::with_capacity(3 + stat.len() + 5);
                 buf.push_str(stat);
                 buf.push_str(":-1|c");
                 buf
