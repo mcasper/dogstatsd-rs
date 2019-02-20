@@ -51,6 +51,7 @@ pub trait Metric {
 pub enum CountMetric<'a> {
     Incr(&'a str),
     Decr(&'a str),
+    Arbitrary(&'a str, i64),
 }
 
 impl<'a> Metric for CountMetric<'a> {
@@ -70,6 +71,14 @@ impl<'a> Metric for CountMetric<'a> {
                 buf.push_str(":-1|c");
                 buf
             },
+            CountMetric::Arbitrary(stat, amount) => {
+                let mut buf = String::with_capacity(3 + stat.len() + 23);
+                buf.push_str(stat);
+                buf.push_str(":");
+                buf.push_str(&amount.to_string());
+                buf.push_str("|c");
+                buf
+            }
         }
     }
 }
@@ -421,6 +430,16 @@ mod tests {
         let metric = CountMetric::Decr("decr".into());
 
         assert_eq!("decr:-1|c", metric.metric_type_format())
+    }
+
+    #[test]
+    fn test_count_metric() {
+        let metric = CountMetric::Arbitrary("arb".into(), 54321);
+        assert_eq!("arb:54321|c", metric.metric_type_format());
+        let metric = CountMetric::Arbitrary("arb".into(), -12345);
+        assert_eq!("arb:-12345|c", metric.metric_type_format());
+        let metric = CountMetric::Arbitrary("arb".into(), 0);
+        assert_eq!("arb:0|c", metric.metric_type_format());
     }
 
     #[test]

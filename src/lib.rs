@@ -220,6 +220,28 @@ impl Client {
         }
     }
 
+    /// Make an arbitrary change to a StatsD counter
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///   use dogstatsd::{Client, Options};
+    ///
+    ///   let client = Client::new(Options::default()).unwrap();
+    ///   client.count("counter", 42, &["tag:counter"])
+    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    /// ```
+    pub fn count<'a, I, S, T>(&self, stat: S, count: i64, tags: I) -> DogstatsdResult
+        where I: IntoIterator<Item=T>,
+              S: Into<Cow<'a, str>>,
+              T: AsRef<str>,
+    {
+        match stat.into() {
+            Cow::Borrowed(stat) => self.send(&CountMetric::Arbitrary(stat, count), tags),
+            Cow::Owned(stat) => self.send(&CountMetric::Arbitrary(&stat, count), tags)
+        }
+    }
+
     /// Time how long it takes for a block of code to execute.
     ///
     /// # Examples
@@ -508,6 +530,18 @@ mod bench {
         let tags = &["name1:value1"];
         b.iter(|| {
             client.decr("bench.decr", tags).unwrap();
+        })
+    }
+
+    #[bench]
+    fn bench_count(b: &mut Bencher) {
+        let options = Options::default();
+        let client = Client::new(options).unwrap();
+        let tags = &["name1:value1"];
+        let mut i = 0;
+        b.iter(|| {
+            client.count("bench.count", i, tags).unwrap();
+            i += 1;
         })
     }
 
