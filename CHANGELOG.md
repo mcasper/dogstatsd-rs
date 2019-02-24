@@ -8,11 +8,20 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] - 2019-02-23
+
+### Added
+- Support for an arbitrary count metric, instead of just incrementing or decrementing - https://github.com/mcasper/dogstatsd-rs/pull/24
+
+### Fixed
+- Benchmarks compile and run again - https://github.com/mcasper/dogstatsd-rs/pull/24
+- Decrement metric string allocation - https://github.com/mcasper/dogstatsd-rs/pull/24
+
 ## [0.5.0] - 2018-04-26
 
 ### Added
 - Support for the distribution metric type - https://github.com/mcasper/dogstatsd-rs/commit/e04d0ee913da93c91d9f41c94dd9d3b099b511a7
-- Make DogstatsdError type public - https://github.com/mcasper/dogstatsd-rs/pull/21<Paste>
+- Make DogstatsdError type public - https://github.com/mcasper/dogstatsd-rs/pull/21
 
 ### Improved
 - Allow stat and value arguments to be separate types - https://github.com/mcasper/dogstatsd-rs/commit/f1927ad1918f821fc6771a20b2b9c4abf9c0bcd9
