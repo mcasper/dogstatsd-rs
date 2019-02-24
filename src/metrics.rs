@@ -51,6 +51,7 @@ pub trait Metric {
 pub enum CountMetric<'a> {
     Incr(&'a str),
     Decr(&'a str),
+    Arbitrary(&'a str, i64),
 }
 
 impl<'a> Metric for CountMetric<'a> {
@@ -65,11 +66,19 @@ impl<'a> Metric for CountMetric<'a> {
                 buf
             },
             CountMetric::Decr(stat) => {
-                let mut buf = String::with_capacity(3 + stat.len() + 4);
+                let mut buf = String::with_capacity(3 + stat.len() + 5);
                 buf.push_str(stat);
                 buf.push_str(":-1|c");
                 buf
             },
+            CountMetric::Arbitrary(stat, amount) => {
+                let mut buf = String::with_capacity(3 + stat.len() + 23);
+                buf.push_str(stat);
+                buf.push_str(":");
+                buf.push_str(&amount.to_string());
+                buf.push_str("|c");
+                buf
+            }
         }
     }
 }
@@ -424,6 +433,16 @@ mod tests {
     }
 
     #[test]
+    fn test_count_metric() {
+        let metric = CountMetric::Arbitrary("arb".into(), 54321);
+        assert_eq!("arb:54321|c", metric.metric_type_format());
+        let metric = CountMetric::Arbitrary("arb".into(), -12345);
+        assert_eq!("arb:-12345|c", metric.metric_type_format());
+        let metric = CountMetric::Arbitrary("arb".into(), 0);
+        assert_eq!("arb:0|c", metric.metric_type_format());
+    }
+
+    #[test]
     fn test_time_metric() {
         let start_time = Utc.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 0);
         let end_time = Utc.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 900);
@@ -540,13 +559,22 @@ mod bench {
     use self::test::Bencher;
     use super::*;
 
-    #[bench]
-    fn bench_format_for_send(b: &mut Bencher) {
-        b.iter(|| {
-            format_for_send("metric", "foo", &["bar", "baz"]);
-        })
+    struct NullMetric;
+
+    impl Metric for NullMetric {
+        fn metric_type_format(&self) -> String {
+            String::new()
+        }
     }
 
+    #[bench]
+    fn bench_format_for_send(b: &mut Bencher) {
+        let metric = NullMetric;
+
+        b.iter(|| {
+            format_for_send(&metric, "foo", &["bar", "baz"]);
+        })
+    }
 
     #[bench]
     fn bench_set_metric(b: &mut Bencher) {
