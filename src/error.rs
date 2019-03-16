@@ -13,7 +13,9 @@ use self::DogstatsdError::*;
 
 impl fmt::Display for DogstatsdError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self)
+        match *self {
+            IoError(ref error) => write!(f, "{}", error),
+        }
     }
 }
 
@@ -28,5 +30,17 @@ impl Error for DogstatsdError {
 impl From<io::Error> for DogstatsdError {
     fn from(e: io::Error) -> Self {
         IoError(e)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DogstatsdError;
+    use std::io;
+
+    #[test]
+    fn test_error_display() {
+        let err = DogstatsdError::from(io::Error::new(io::ErrorKind::Other, "oh no!"));
+        assert_eq!(format!("{}", err), "oh no!".to_owned());
     }
 }
