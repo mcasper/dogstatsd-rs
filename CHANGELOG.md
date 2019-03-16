@@ -8,6 +8,11 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.1] - 2019-03-16
+
+### Fixed
+- Segfault in DogstatsdError Display implementation - https://github.com/mcasper/dogstatsd-rs/pull/25
+
 ## [0.6.0] - 2019-02-23
 
 ### Added
