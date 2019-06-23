@@ -26,7 +26,7 @@
 //! Start sending metrics:
 //!
 //! ```
-//! use dogstatsd::{Client, Options};
+//! use dogstatsd::{Client, Options, ServiceCheckOptions, ServiceStatus};
 //!
 //! let client = Client::new(Options::default()).unwrap();
 //! let tags = &["env:production"];
@@ -56,6 +56,13 @@
 //!
 //! // Report a member of a set
 //! client.set("my_set", "13579", tags).unwrap();
+//!
+//! // Report a service check
+//! let service_check_options = ServiceCheckOptions {
+//!   hostname: Some("my-host.localhost"),
+//!   ..Default::default()
+//! };
+//! client.service_check("redis.can_connect", ServiceStatus::OK, tags, Some(service_check_options)).unwrap();
 //!
 //! // Send a custom event
 //! client.event("My Custom Event Title", "My Custom Event Body", tags).unwrap();

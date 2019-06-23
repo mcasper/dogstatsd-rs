@@ -20,55 +20,56 @@ use dogstatsd::{Client, Options};
 // Binds to a udp socket on an available ephemeral port on 127.0.0.1 for
 // transmitting, and sends to 127.0.0.1:8125, the default dogstatsd address.
 let default_options = Options::default();
-let default_client = Client::new(default_options);
+let default_client = Client::new(default_options).unwrap();
 
 // Binds to 127.0.0.1:9000 for transmitting and sends to 10.1.2.3:8125, with a
 // namespace of "analytics".
 let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics");
-let custom_client = Client::new(custom_options);
+let custom_client = Client::new(custom_options).unwrap();
 ```
 
 Start sending metrics:
 ```rust
-use dogstatsd::{Client, Options, ServiceStatus, ServiceCheckOptions};
+use dogstatsd::{Client, Options, ServiceCheckOptions, ServiceStatus};
 
-let client = Client::new(Options::default());
+let client = Client::new(Options::default()).unwrap();
+let tags = &["env:production"];
 
 // Increment a counter
-client.incr("my_counter", vec![]).unwrap();
+client.incr("my_counter", tags).unwrap();
 
 // Decrement a counter
-client.decr("my_counter", vec![]).unwrap();
+client.decr("my_counter", tags).unwrap();
 
 // Time a block of code (reports in ms)
-client.time("my_time", vec![], || {
+client.time("my_time", tags, || {
     // Some time consuming code
 }).unwrap();
 
 // Report your own timing in ms
-client.timing("my_timing", 500, vec![]).unwrap();
+client.timing("my_timing", 500, tags).unwrap();
 
 // Report an arbitrary value (a gauge)
-client.gauge("my_gauge", "12345", vec![]).unwrap();
+client.gauge("my_gauge", "12345", tags).unwrap();
 
 // Report a sample of a histogram
-client.histogram("my_histogram", "67890", vec![]).unwrap();
+client.histogram("my_histogram", "67890", tags).unwrap();
+
+// Report a sample of a distribution
+client.distribution("distribution", "67890", tags).unwrap();
 
 // Report a member of a set
-client.set("my_set", "13579", vec![]).unwrap();
+client.set("my_set", "13579", tags).unwrap();
 
 // Report a service check
 let service_check_options = ServiceCheckOptions {
   hostname: Some("my-host.localhost"),
   ..Default::default()
 };
-client.service_check("redis.can_connect", ServiceStatus::OK, vec![], service_check_options).unwrap();
+client.service_check("redis.can_connect", ServiceStatus::OK, tags, Some(service_check_options)).unwrap();
 
 // Send a custom event
-client.event("My Custom Event Title", "My Custom Event Body", vec![]).unwrap();
-
-// Add tags to any metric by passing a Vec<String> of tags to apply
-client.gauge("my_gauge", "12345", vec!["tag:1".into(), "tag:2".into()]).unwrap();
+client.event("My Custom Event Title", "My Custom Event Body", tags).unwrap();
 ```
 
 ## Benchmarks
