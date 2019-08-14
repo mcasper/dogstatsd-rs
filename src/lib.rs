@@ -199,10 +199,7 @@ impl Client {
               S: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        match stat.into() {
-            Cow::Borrowed(stat) => self.send(&CountMetric::Incr(stat), tags),
-            Cow::Owned(stat) => self.send(&CountMetric::Incr(&stat), tags)
-        }
+        self.send(&CountMetric::Incr(stat.into().as_ref()), tags)
     }
 
     /// Decrement a StatsD counter
@@ -221,10 +218,7 @@ impl Client {
               S: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        match stat.into() {
-            Cow::Borrowed(stat) => self.send(&CountMetric::Decr(stat), tags),
-            Cow::Owned(stat) => self.send(&CountMetric::Decr(&stat), tags)
-        }
+        self.send(&CountMetric::Decr(stat.into().as_ref()), tags)
     }
 
     /// Make an arbitrary change to a StatsD counter
@@ -243,10 +237,7 @@ impl Client {
               S: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        match stat.into() {
-            Cow::Borrowed(stat) => self.send(&CountMetric::Arbitrary(stat, count), tags),
-            Cow::Owned(stat) => self.send(&CountMetric::Arbitrary(&stat, count), tags)
-        }
+        self.send(&CountMetric::Arbitrary(stat.into().as_ref(), count), tags)
     }
 
     /// Time how long it takes for a block of code to execute.
@@ -272,11 +263,7 @@ impl Client {
         let start_time = Utc::now();
         block();
         let end_time = Utc::now();
-
-        match stat.into() {
-            Cow::Borrowed(stat) => self.send(&TimeMetric::new(stat, &start_time, &end_time), tags),
-            Cow::Owned(stat) => self.send(&TimeMetric::new(&stat, &start_time, &end_time), tags)
-        }
+        self.send(&TimeMetric::new(stat.into().as_ref(), &start_time, &end_time), tags)
     }
 
     /// Send your own timing metric in milliseconds
@@ -295,10 +282,7 @@ impl Client {
               S: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        match stat.into() {
-            Cow::Borrowed(stat) => self.send(&TimingMetric::new(stat, ms), tags),
-            Cow::Owned(stat) => self.send(&TimingMetric::new(&stat, ms), tags)
-        }
+        self.send(&TimingMetric::new(stat.into().as_ref(), ms), tags)
     }
 
     /// Report an arbitrary value as a gauge
@@ -318,12 +302,7 @@ impl Client {
               SS: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        match (stat.into(), val.into()) {
-            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(&GaugeMetric::new(stat, val), tags),
-            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(&GaugeMetric::new(&stat, val), tags),
-            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(&GaugeMetric::new(stat, &val), tags),
-            (Cow::Owned(stat), Cow::Owned(val)) => self.send(&GaugeMetric::new(&stat, &val), tags)
-        }
+        self.send(&GaugeMetric::new(stat.into().as_ref(), val.into().as_ref()), tags)
     }
 
     /// Report a value in a histogram
@@ -343,12 +322,7 @@ impl Client {
               SS: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        match (stat.into(), val.into()) {
-            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(&HistogramMetric::new(stat, val), tags),
-            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(&HistogramMetric::new(&stat, val), tags),
-            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(&HistogramMetric::new(stat, &val), tags),
-            (Cow::Owned(stat), Cow::Owned(val)) => self.send(&HistogramMetric::new(&stat, &val), tags)
-        }
+        self.send(&HistogramMetric::new(stat.into().as_ref(), val.into().as_ref()), tags)
     }
 
     /// Report a value in a distribution
@@ -368,12 +342,7 @@ impl Client {
               SS: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        match (stat.into(), val.into()) {
-            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(&DistributionMetric::new(stat, val), tags),
-            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(&DistributionMetric::new(&stat, val), tags),
-            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(&DistributionMetric::new(stat, &val), tags),
-            (Cow::Owned(stat), Cow::Owned(val)) => self.send(&DistributionMetric::new(&stat, &val), tags)
-        }
+        self.send(&DistributionMetric::new(stat.into().as_ref(), val.into().as_ref()), tags)
     }
 
     /// Report a value in a set
@@ -393,12 +362,7 @@ impl Client {
               SS: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        match (stat.into(), val.into()) {
-            (Cow::Borrowed(stat), Cow::Borrowed(val)) => self.send(&SetMetric::new(stat, val), tags),
-            (Cow::Owned(stat), Cow::Borrowed(val)) => self.send(&SetMetric::new(&stat, val), tags),
-            (Cow::Borrowed(stat), Cow::Owned(val)) => self.send(&SetMetric::new(stat, &val), tags),
-            (Cow::Owned(stat), Cow::Owned(val)) => self.send(&SetMetric::new(&stat, &val), tags)
-        }
+        self.send(&SetMetric::new(stat.into().as_ref(), val.into().as_ref()), tags)
     }
 
     /// Report the status of a service
@@ -432,11 +396,8 @@ impl Client {
               S: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        let unwrapped_options = options.unwrap_or(ServiceCheckOptions::default());
-        match stat.into() {
-            Cow::Borrowed(stat) => self.send(&ServiceCheck::new(stat, val, unwrapped_options), tags),
-            Cow::Owned(stat) => self.send(&ServiceCheck::new(&stat, val, unwrapped_options), tags),
-        }
+        let unwrapped_options = options.unwrap_or_default();
+        self.send(&ServiceCheck::new(stat.into().as_ref(), val, unwrapped_options), tags)
     }
 
     /// Send a custom event as a title and a body
@@ -456,12 +417,7 @@ impl Client {
               SS: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
-        match (title.into(), text.into()) {
-            (Cow::Borrowed(title), Cow::Borrowed(text)) => self.send(&Event::new(title, text), tags),
-            (Cow::Owned(title), Cow::Borrowed(text)) => self.send(&Event::new(&title, text), tags),
-            (Cow::Borrowed(title), Cow::Owned(text)) => self.send(&Event::new(title, &text), tags),
-            (Cow::Owned(title), Cow::Owned(text)) => self.send(&Event::new(&title, &text), tags)
-        }
+        self.send(&Event::new(title.into().as_ref(), text.into().as_ref()), tags)
     }
 
     fn send<I, M, S>(&self, metric: &M, tags: I) -> DogstatsdResult
