@@ -1,0 +1,74 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `dogstatsd` crate."><meta name="keywords" content="rust, rustlang, rust-lang, dogstatsd"><title>dogstatsd - Rust</title><link rel="stylesheet" type="text/css" href="../normalize.css"><link rel="stylesheet" type="text/css" href="../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../dark.css"><link rel="stylesheet" type="text/css" href="../light.css" id="themeStyle"><script src="../storage.js"></script><noscript><link rel="stylesheet" href="../noscript.css"></noscript><link rel="shortcut icon" href="../favicon.ico"><style type="text/css">#crate-search{background-image:url("../down-arrow.svg");}</style></head><body class="rustdoc mod"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><a href='../dogstatsd/index.html'><div class='logo-container'><img src='../rust-logo.png' alt='logo'></div></a><p class='location'>Crate dogstatsd</p><div class="sidebar-elems"><a id='all-types' href='all.html'><p>See all dogstatsd's items</p></a><div class="block items"><ul><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#types">Type Definitions</a></li></ul></div><p class='location'></p><script>window.sidebarCurrent = {name: 'dogstatsd', ty: 'mod', relpath: '../'};</script></div></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../theme.js"></script><nav class="sub"><form class="search-form js-only"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><a id="settings-menu" href="../settings.html"><img src="../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><h1 class='fqn'><span class='out-of-band'><span id='render-detail'><a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class='inner'>&#x2212;</span>]</a></span><a class='srclink' href='../src/dogstatsd/lib.rs.html#1-595' title='goto source code'>[src]</a></span><span class='in-band'>Crate <a class="mod" href=''>dogstatsd</a></span></h1><div class='docblock'><p>A Rust client for interacting with Dogstatsd</p>
+<p>Dogstatsd is a custom <code>StatsD</code> implementation by <code>DataDog</code> for sending metrics and events to their
+system. Through this client you can report any type of metric you want, tag it, and enjoy your
+custom metrics.</p>
+<h2 id="usage" class="section-header"><a href="#usage">Usage</a></h2>
+<p>Build an options struct and create a client:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered">
+<span class="kw">use</span> <span class="ident">dogstatsd</span>::{<span class="ident">Client</span>, <span class="ident">Options</span>};
+
+<span class="comment">// Binds to a udp socket on an available ephemeral port on 127.0.0.1 for</span>
+<span class="comment">// transmitting, and sends to  127.0.0.1:8125, the default dogstatsd</span>
+<span class="comment">// address.</span>
+<span class="kw">let</span> <span class="ident">default_options</span> <span class="op">=</span> <span class="ident">Options</span>::<span class="ident">default</span>();
+<span class="kw">let</span> <span class="ident">default_client</span> <span class="op">=</span> <span class="ident">Client</span>::<span class="ident">new</span>(<span class="ident">default_options</span>).<span class="ident">unwrap</span>();
+
+<span class="comment">// Binds to 127.0.0.1:9000 for transmitting and sends to 10.1.2.3:8125, with a</span>
+<span class="comment">// namespace of &quot;analytics&quot;.</span>
+<span class="kw">let</span> <span class="ident">custom_options</span> <span class="op">=</span> <span class="ident">Options</span>::<span class="ident">new</span>(<span class="string">&quot;127.0.0.1:9000&quot;</span>, <span class="string">&quot;10.1.2.3:8125&quot;</span>, <span class="string">&quot;analytics&quot;</span>);
+<span class="kw">let</span> <span class="ident">custom_client</span> <span class="op">=</span> <span class="ident">Client</span>::<span class="ident">new</span>(<span class="ident">custom_options</span>).<span class="ident">unwrap</span>();</pre></div>
+<p>Start sending metrics:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered">
+<span class="kw">use</span> <span class="ident">dogstatsd</span>::{<span class="ident">Client</span>, <span class="ident">Options</span>, <span class="ident">ServiceCheckOptions</span>, <span class="ident">ServiceStatus</span>};
+
+<span class="kw">let</span> <span class="ident">client</span> <span class="op">=</span> <span class="ident">Client</span>::<span class="ident">new</span>(<span class="ident">Options</span>::<span class="ident">default</span>()).<span class="ident">unwrap</span>();
+<span class="kw">let</span> <span class="ident">tags</span> <span class="op">=</span> <span class="kw-2">&amp;</span>[<span class="string">&quot;env:production&quot;</span>];
+
+<span class="comment">// Increment a counter</span>
+<span class="ident">client</span>.<span class="ident">incr</span>(<span class="string">&quot;my_counter&quot;</span>, <span class="ident">tags</span>).<span class="ident">unwrap</span>();
+
+<span class="comment">// Decrement a counter</span>
+<span class="ident">client</span>.<span class="ident">decr</span>(<span class="string">&quot;my_counter&quot;</span>, <span class="ident">tags</span>).<span class="ident">unwrap</span>();
+
+<span class="comment">// Time a block of code (reports in ms)</span>
+<span class="ident">client</span>.<span class="ident">time</span>(<span class="string">&quot;my_time&quot;</span>, <span class="ident">tags</span>, <span class="op">||</span> {
+    <span class="comment">// Some time consuming code</span>
+}).<span class="ident">unwrap</span>();
+
+<span class="comment">// Report your own timing in ms</span>
+<span class="ident">client</span>.<span class="ident">timing</span>(<span class="string">&quot;my_timing&quot;</span>, <span class="number">500</span>, <span class="ident">tags</span>).<span class="ident">unwrap</span>();
+
+<span class="comment">// Report an arbitrary value (a gauge)</span>
+<span class="ident">client</span>.<span class="ident">gauge</span>(<span class="string">&quot;my_gauge&quot;</span>, <span class="string">&quot;12345&quot;</span>, <span class="ident">tags</span>).<span class="ident">unwrap</span>();
+
+<span class="comment">// Report a sample of a histogram</span>
+<span class="ident">client</span>.<span class="ident">histogram</span>(<span class="string">&quot;my_histogram&quot;</span>, <span class="string">&quot;67890&quot;</span>, <span class="ident">tags</span>).<span class="ident">unwrap</span>();
+
+<span class="comment">// Report a sample of a distribution</span>
+<span class="ident">client</span>.<span class="ident">distribution</span>(<span class="string">&quot;distribution&quot;</span>, <span class="string">&quot;67890&quot;</span>, <span class="ident">tags</span>).<span class="ident">unwrap</span>();
+
+<span class="comment">// Report a member of a set</span>
+<span class="ident">client</span>.<span class="ident">set</span>(<span class="string">&quot;my_set&quot;</span>, <span class="string">&quot;13579&quot;</span>, <span class="ident">tags</span>).<span class="ident">unwrap</span>();
+
+<span class="comment">// Report a service check</span>
+<span class="kw">let</span> <span class="ident">service_check_options</span> <span class="op">=</span> <span class="ident">ServiceCheckOptions</span> {
+  <span class="ident">hostname</span>: <span class="prelude-val">Some</span>(<span class="string">&quot;my-host.localhost&quot;</span>),
+  ..<span class="ident">Default</span>::<span class="ident">default</span>()
+};
+<span class="ident">client</span>.<span class="ident">service_check</span>(<span class="string">&quot;redis.can_connect&quot;</span>, <span class="ident">ServiceStatus</span>::<span class="ident">OK</span>, <span class="ident">tags</span>, <span class="prelude-val">Some</span>(<span class="ident">service_check_options</span>)).<span class="ident">unwrap</span>();
+
+<span class="comment">// Send a custom event</span>
+<span class="ident">client</span>.<span class="ident">event</span>(<span class="string">&quot;My Custom Event Title&quot;</span>, <span class="string">&quot;My Custom Event Body&quot;</span>, <span class="ident">tags</span>).<span class="ident">unwrap</span>();</pre></div>
+</div><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table><tr class='module-item'><td><a class="struct" href="struct.Client.html" title='dogstatsd::Client struct'>Client</a></td><td class='docblock-short'><p>The client struct that handles sending metrics to the Dogstatsd server.</p>
+</td></tr><tr class='module-item'><td><a class="struct" href="struct.Options.html" title='dogstatsd::Options struct'>Options</a></td><td class='docblock-short'><p>The struct that represents the options available for the Dogstatsd client.</p>
+</td></tr><tr class='module-item'><td><a class="struct" href="struct.ServiceCheckOptions.html" title='dogstatsd::ServiceCheckOptions struct'>ServiceCheckOptions</a></td><td class='docblock-short'><p>Struct for adding optional pieces to a service check</p>
+</td></tr></table><h2 id='enums' class='section-header'><a href="#enums">Enums</a></h2>
+<table><tr class='module-item'><td><a class="enum" href="enum.DogstatsdError.html" title='dogstatsd::DogstatsdError enum'>DogstatsdError</a></td><td class='docblock-short'><p>This type represents the possible errors that can occur while
+sending DogstatsD metrics.</p>
+</td></tr><tr class='module-item'><td><a class="enum" href="enum.ServiceStatus.html" title='dogstatsd::ServiceStatus enum'>ServiceStatus</a></td><td class='docblock-short'><p>Represents the different states a service can be in</p>
+</td></tr></table><h2 id='types' class='section-header'><a href="#types">Type Definitions</a></h2>
+<table><tr class='module-item'><td><a class="type" href="type.DogstatsdResult.html" title='dogstatsd::DogstatsdResult type'>DogstatsdResult</a></td><td class='docblock-short'><p>A type alias for returning a unit type or an error</p>
+</td></tr></table></section><section id="search" class="content hidden"></section><section class="footer"></section><aside id="help" class="hidden"><div><h1 class="hidden">Help</h1><div class="shortcuts"><h2>Keyboard Shortcuts</h2><dl><dt><kbd>?</kbd></dt><dd>Show this help dialog</dd><dt><kbd>S</kbd></dt><dd>Focus the search field</dd><dt><kbd>↑</kbd></dt><dd>Move up in search results</dd><dt><kbd>↓</kbd></dt><dd>Move down in search results</dd><dt><kbd>↹</kbd></dt><dd>Switch tab</dd><dt><kbd>&#9166;</kbd></dt><dd>Go to active search result</dd><dt><kbd>+</kbd></dt><dd>Expand all sections</dd><dt><kbd>-</kbd></dt><dd>Collapse all sections</dd></dl></div><div class="infos"><h2>Search Tricks</h2><p>Prefix searches with a type followed by a colon (e.g., <code>fn:</code>) to restrict the search to a given type.</p><p>Accepted types are: <code>fn</code>, <code>mod</code>, <code>struct</code>, <code>enum</code>, <code>trait</code>, <code>type</code>, <code>macro</code>, and <code>const</code>.</p><p>Search functions by type signature (e.g., <code>vec -> usize</code> or <code>* -> vec</code>)</p><p>Search multiple things at once by splitting your query with comma (e.g., <code>str,u8</code> or <code>String,struct:Vec,test</code>)</p></div></div></aside><script>window.rootPath = "../";window.currentCrate = "dogstatsd";</script><script src="../aliases.js"></script><script src="../main.js"></script><script defer src="../search-index.js"></script></body></html>
