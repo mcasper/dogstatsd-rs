@@ -1,9 +1,11 @@
+use crate::Tag;
+
 use chrono::{DateTime, Utc};
 
-pub fn format_for_send<M, I, S>(in_metric: &M, in_namespace: &str, tags: I) -> Vec<u8>
+pub fn format_for_send<M, I, T>(in_metric: &M, in_namespace: &str, tags: I) -> Vec<u8>
     where M: Metric,
-          I: IntoIterator<Item=S>,
-          S: AsRef<str>,
+          I: IntoIterator<Item=T>,
+          T: Tag,
 {
     let metric = in_metric.metric_type_format();
     let namespace = if in_metric.uses_namespace() {
@@ -28,7 +30,7 @@ pub fn format_for_send<M, I, S>(in_metric: &M, in_namespace: &str, tags: I) -> V
     }
 
     while next_tag.is_some() {
-        buf.extend_from_slice(next_tag.unwrap().as_ref().as_bytes());
+        next_tag.unwrap().write_tag(&mut buf).unwrap();
 
         next_tag = tags_iter.next();
 
@@ -415,6 +417,15 @@ mod tests {
         assert_eq!(
             &b"_e{5,4}:title|text|#tag:1,tag:2"[..],
             &format_for_send(&Event::new("title".into(), "text".into()), "namespace", &["tag:1", "tag:2"])[..]
+        )
+    }
+
+    #[test]
+    fn test_format_for_send_tuple_label() {
+        let labels: crate::TagTuple<_, _> = ("abc", "def").into();
+        assert_eq!(
+            &*b"foo:1|c|#abc:def",
+            &*format_for_send(&CountMetric::Incr("foo"), "", &[labels])
         )
     }
 
