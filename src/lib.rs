@@ -19,7 +19,7 @@
 //!
 //! // Binds to 127.0.0.1:9000 for transmitting and sends to 10.1.2.3:8125, with a
 //! // namespace of "analytics".
-//! let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics");
+//! let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics").unwrap();
 //! let custom_client = Client::new(custom_options).unwrap();
 //! ```
 //!
@@ -73,8 +73,9 @@
 extern crate chrono;
 
 use chrono::Utc;
-use std::net::UdpSocket;
+use std::net::{UdpSocket, SocketAddr, ToSocketAddrs, Ipv4Addr};
 use std::borrow::Cow;
+use std::io;
 
 mod error;
 pub use self::error::DogstatsdError;
@@ -91,9 +92,9 @@ pub type DogstatsdResult = Result<(), DogstatsdError>;
 #[derive(Debug, PartialEq)]
 pub struct Options {
     /// The address of the udp socket we'll bind to for sending.
-    pub from_addr: String,
+    pub from_addr: SocketAddr,
     /// The address of the udp socket we'll send metrics and events to.
-    pub to_addr: String,
+    pub to_addr: SocketAddr,
     /// A namespace to prefix all metrics with, joined with a '.'.
     pub namespace: String,
 }
@@ -110,19 +111,18 @@ impl Default for Options {
     ///
     ///   assert_eq!(
     ///       Options {
-    ///           from_addr: "127.0.0.1:0".into(),
-    ///           to_addr: "127.0.0.1:8125".into(),
+    ///           from_addr: ([127, 0, 0, 1], 0).into(),
+    ///           to_addr: ([127, 0, 0, 1], 8125).into(),
     ///           namespace: String::new(),
     ///       },
     ///       options
     ///   )
     /// ```
     fn default() -> Self {
-        Options {
-            from_addr: "127.0.0.1:0".into(),
-            to_addr: "127.0.0.1:8125".into(),
-            namespace: String::new(),
-        }
+        let localhost = Ipv4Addr::new(127, 0, 0, 1);
+
+        // ToSocketAddrs on (Ipv4Addr, u16) is infallible:
+        Self::new((localhost, 0), (localhost, 8125), "").unwrap()
     }
 
 }
@@ -137,12 +137,19 @@ impl Options {
     ///
     ///   let options = Options::new("127.0.0.1:9000", "127.0.0.1:9001", "");
     /// ```
-    pub fn new(from_addr: &str, to_addr: &str, namespace: &str) -> Self {
-        Options {
-            from_addr: from_addr.into(),
-            to_addr: to_addr.into(),
-            namespace: namespace.into(),
+    ///
+    pub fn new(from_addr: impl ToSocketAddrs, to_addr: impl ToSocketAddrs, namespace: &str) -> Result<Self, io::Error> {
+        fn resolve(addr: impl ToSocketAddrs) -> Result<SocketAddr, io::Error> {
+            addr.to_socket_addrs()?
+                .nth(0)
+                .ok_or(io::Error::new(io::ErrorKind::AddrNotAvailable, "cannot resolve address"))
         }
+
+        Ok(Options {
+            from_addr: resolve(from_addr)?,
+            to_addr: resolve(to_addr)?,
+            namespace: namespace.to_owned(),
+        })
     }
 }
 
@@ -150,8 +157,8 @@ impl Options {
 #[derive(Debug)]
 pub struct Client {
     socket: UdpSocket,
-    from_addr: String,
-    to_addr: String,
+    from_addr: SocketAddr,
+    to_addr: SocketAddr,
     namespace: String,
 }
 
@@ -438,11 +445,7 @@ mod tests {
     #[test]
     fn test_options_default() {
         let options = Options::default();
-        let expected_options = Options {
-            from_addr: "127.0.0.1:0".into(),
-            to_addr: "127.0.0.1:8125".into(),
-            namespace: String::new(),
-        };
+        let expected_options = Options::new("127.0.0.1:0", "127.0.0.1:8125", "").unwrap();
 
         assert_eq!(expected_options, options)
     }
@@ -452,8 +455,8 @@ mod tests {
         let client = Client::new(Options::default()).unwrap();
         let expected_client = Client {
             socket: UdpSocket::bind("127.0.0.1:0").unwrap(),
-            from_addr: "127.0.0.1:0".into(),
-            to_addr: "127.0.0.1:8125".into(),
+            from_addr: ([127, 0, 0, 1], 0).into(),
+            to_addr: ([127, 0, 0, 1], 8125).into(),
             namespace: String::new(),
         };
 
@@ -463,7 +466,7 @@ mod tests {
     use metrics::GaugeMetric;
     #[test]
     fn test_send() {
-        let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "");
+        let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "").unwrap();
         let client = Client::new(options).unwrap();
         // Shouldn't panic or error
         client.send(&GaugeMetric::new("gauge".into(), "1234".into()), &["tag1", "tag2"]).unwrap();
