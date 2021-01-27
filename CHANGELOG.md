@@ -8,6 +8,11 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.2] - 2021-01-26
+
+### Fixed
+- Build error from deprecated `Error::description` impl, replaced with `Error::source` - https://github.com/mcasper/dogstatsd-rs/pull/31
+
 ## [0.6.1] - 2019-03-16
 
 ### Fixed
