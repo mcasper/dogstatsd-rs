@@ -75,6 +75,8 @@ extern crate chrono;
 use chrono::Utc;
 use std::net::UdpSocket;
 use std::borrow::Cow;
+use std::fmt;
+use std::io;
 
 mod error;
 pub use self::error::DogstatsdError;
@@ -86,6 +88,68 @@ pub use self::metrics::{ServiceStatus, ServiceCheckOptions};
 
 /// A type alias for returning a unit type or an error
 pub type DogstatsdResult = Result<(), DogstatsdError>;
+
+/// This trait represents anything that can be turned into a tag.
+///
+/// There's a blanket implementation of Tag for AsRef<str>, for the most part you
+/// can do make do just thinking of this trait as being equivalent to AsRef<str>.
+///
+/// What this trait does is allow you to have types that are not AsRef<str> but
+/// can still be turned into tags. For example the TagTuple struct lets you turn
+/// a tuple of AsRef<str> values into a key-value tag.
+pub trait Tag {
+    /// Write the tag to the given writer
+    fn write_tag<W: io::Write>(&self, w: &mut W) -> io::Result<()>;
+}
+
+impl<T: AsRef<str>> Tag for T {
+    fn write_tag<W: io::Write>(&self, w: &mut W) -> io::Result<()> {
+        w.write_all(self.as_ref().as_bytes())
+    }
+}
+
+/// A newtype around a (K, V) tuple that implements Tag.
+///
+/// This will let you do
+/// ```
+/// use dogstatsd::{TagTuple, Client, Options};
+///
+/// let client = Client::new(Options::default()).unwrap();
+/// let tags = TagTuple::new("foo", "bar");
+/// client.incr("my_counter", &[tags]);
+/// ```
+/// This will add the tag `foo:bar`.
+///
+/// Do note that it isn't checked whether the key contains `:`. No character is
+/// escaped. If you submit `("ab:cd", "ef")` you'll just end up with `"ab:cd:ef"`.
+#[derive(Debug)]
+#[repr(transparent)]
+pub struct TagTuple<K: AsRef<str> + fmt::Debug, V: AsRef<str> + fmt::Debug>((K, V));
+impl<K: AsRef<str> + fmt::Debug, V: AsRef<str> + fmt::Debug> Tag for &TagTuple<K, V> {
+    fn write_tag<W: io::Write>(&self, w: &mut W) -> io::Result<()> {
+        let (key, value) = &self.0;
+        w.write_all(key.as_ref().as_bytes())?;
+        w.write_all(b":")?;
+        w.write_all(value.as_ref().as_bytes())?;
+        Ok(())
+    }
+}
+impl<K: AsRef<str> + fmt::Debug, V: AsRef<str> + fmt::Debug> Tag for TagTuple<K, V> {
+    fn write_tag<W: io::Write>(&self, w: &mut W) -> io::Result<()> {
+        (&self).write_tag(w)
+    }
+}
+impl<K: AsRef<str> + fmt::Debug, V: AsRef<str> + fmt::Debug> From<(K, V)> for TagTuple<K, V> {
+    fn from(tag: (K, V)) -> Self {
+        TagTuple(tag)
+    }
+}
+impl<K: AsRef<str> + fmt::Debug, V: AsRef<str> + fmt::Debug> TagTuple<K, V> {
+    /// Create a new tag tuple from a key and a value
+    pub fn new(k: K, v: V) -> Self {
+        TagTuple((k, v))
+    }
+}
 
 /// The struct that represents the options available for the Dogstatsd client.
 #[derive(Debug, PartialEq)]
@@ -197,7 +261,7 @@ impl Client {
     pub fn incr<'a, I, S, T>(&self, stat: S, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+              T: Tag,
     {
         self.send(&CountMetric::Incr(stat.into().as_ref()), tags)
     }
@@ -216,7 +280,7 @@ impl Client {
     pub fn decr<'a, I, S, T>(&self, stat: S, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+              T: Tag,
     {
         self.send(&CountMetric::Decr(stat.into().as_ref()), tags)
     }
@@ -235,7 +299,7 @@ impl Client {
     pub fn count<'a, I, S, T>(&self, stat: S, count: i64, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+              T: Tag,
     {
         self.send(&CountMetric::Arbitrary(stat.into().as_ref(), count), tags)
     }
@@ -258,7 +322,7 @@ impl Client {
         where F: FnOnce(),
               I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+              T: Tag,
     {
         let start_time = Utc::now();
         block();
@@ -280,7 +344,7 @@ impl Client {
     pub fn timing<'a, I, S, T>(&self, stat: S, ms: i64, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+              T: Tag,
     {
         self.send(&TimingMetric::new(stat.into().as_ref(), ms), tags)
     }
@@ -300,7 +364,7 @@ impl Client {
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
               SS: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+              T: Tag,
     {
         self.send(&GaugeMetric::new(stat.into().as_ref(), val.into().as_ref()), tags)
     }
@@ -320,7 +384,7 @@ impl Client {
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
               SS: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+              T: Tag,
     {
         self.send(&HistogramMetric::new(stat.into().as_ref(), val.into().as_ref()), tags)
     }
@@ -340,7 +404,7 @@ impl Client {
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
               SS: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+              T: Tag,
     {
         self.send(&DistributionMetric::new(stat.into().as_ref(), val.into().as_ref()), tags)
     }
@@ -360,7 +424,7 @@ impl Client {
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
               SS: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+              T: Tag,
     {
         self.send(&SetMetric::new(stat.into().as_ref(), val.into().as_ref()), tags)
     }
@@ -394,7 +458,7 @@ impl Client {
     pub fn service_check<'a, I, S, T>(&self, stat: S, val: ServiceStatus, tags: I, options: Option<ServiceCheckOptions>) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+              T: Tag,
     {
         let unwrapped_options = options.unwrap_or_default();
         self.send(&ServiceCheck::new(stat.into().as_ref(), val, unwrapped_options), tags)
@@ -415,15 +479,15 @@ impl Client {
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
               SS: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+              T: Tag,
     {
         self.send(&Event::new(title.into().as_ref(), text.into().as_ref()), tags)
     }
 
-    fn send<I, M, S>(&self, metric: &M, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=S>,
+    fn send<I, M, T>(&self, metric: &M, tags: I) -> DogstatsdResult
+        where I: IntoIterator<Item=T>,
               M: Metric,
-              S: AsRef<str>,
+              T: Tag,
     {
         let formatted_metric = format_for_send(metric, &self.namespace, tags);
         self.socket.send_to(formatted_metric.as_slice(), &self.to_addr)?;
