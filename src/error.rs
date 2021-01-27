@@ -20,9 +20,9 @@ impl fmt::Display for DogstatsdError {
 }
 
 impl Error for DogstatsdError {
-    fn description(&self) -> &str {
-        match *self {
-            IoError(ref error) => error.description(),
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            IoError(error) => Some(error),
         }
     }
 }
