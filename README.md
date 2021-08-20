@@ -78,4 +78,6 @@ Support is provided for running benchmarks of all client commands. Until the
 `Bencher` type is stable Rust, the benchmarks are isolated behind the
 `unstable` feature flag. To run the benchmarks using `rustup`:
 
+```
     rustup run nightly cargo bench --features=unstable
+```
