@@ -4,7 +4,6 @@ use std::borrow::Cow;
 use crate::client::common::*;
 use crate::error::DogstatsdError;
 use crate::metrics::*;
-// use crate::metrics::{ServiceStatus, ServiceCheckOptions};
 
 /// The client struct that handles synchronously sending metrics to the Dogstatsd server.
 #[derive(Debug)]
