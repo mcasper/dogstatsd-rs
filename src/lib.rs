@@ -77,4 +77,5 @@ mod error;
 mod metrics;
 
 pub use client::*;
+pub use error::*;
 pub use metrics::*;
