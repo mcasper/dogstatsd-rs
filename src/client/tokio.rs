@@ -6,7 +6,7 @@ use crate::error::DogstatsdError;
 use crate::metrics::*;
 
 /// The client struct that handles synchronously sending metrics to the Dogstatsd server.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Client {
     socket: UdpSocket,
     from_addr: String,
