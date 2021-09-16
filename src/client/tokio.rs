@@ -113,14 +113,15 @@ impl Client {
     ///       thread::sleep(Duration::from_millis(200))
     ///   }).unwrap_or_else(|e| println!("Encountered error: {}", e))
     /// ```
-    pub async fn time<'a, F, I, S, T>(&self, stat: S, tags: I, block: F) -> DogstatsdResult
-        where F: FnOnce(),
-              I: IntoIterator<Item=T>,
-              S: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+    pub async fn time<'a, F, I, S, T, Fut>(&self, stat: S, tags: I, block: F) -> DogstatsdResult
+    where F: FnOnce() -> Fut,
+          Fut: std::future::Future,
+          I: IntoIterator<Item=T>,
+          S: Into<Cow<'a, str>>,
+          T: AsRef<str>,
     {
         let start_time = chrono::Utc::now();
-        block();
+        block().await;
         let end_time = chrono::Utc::now();
         self.send(&TimeMetric::new(stat.into().as_ref(), &start_time, &end_time), tags).await
     }
