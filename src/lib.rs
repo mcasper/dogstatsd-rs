@@ -19,7 +19,7 @@
 //!
 //! // Binds to 127.0.0.1:9000 for transmitting and sends to 10.1.2.3:8125, with a
 //! // namespace of "analytics".
-//! let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics");
+//! let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics", vec!(String::new()));
 //! let custom_client = Client::new(custom_options).unwrap();
 //! ```
 //!
@@ -73,7 +73,7 @@
 extern crate chrono;
 
 use chrono::Utc;
-use std::net::UdpSocket;
+use std::{net::UdpSocket};
 use std::borrow::Cow;
 
 mod error;
@@ -96,6 +96,8 @@ pub struct Options {
     pub to_addr: String,
     /// A namespace to prefix all metrics with, joined with a '.'.
     pub namespace: String,
+    /// Default tags to include with every request.
+    pub default_tags: Vec<String>
 }
 
 impl Default for Options {
@@ -113,6 +115,7 @@ impl Default for Options {
     ///           from_addr: "127.0.0.1:0".into(),
     ///           to_addr: "127.0.0.1:8125".into(),
     ///           namespace: String::new(),
+    ///           default_tags: vec!()
     ///       },
     ///       options
     ///   )
@@ -122,6 +125,7 @@ impl Default for Options {
             from_addr: "127.0.0.1:0".into(),
             to_addr: "127.0.0.1:8125".into(),
             namespace: String::new(),
+            default_tags: vec!()
         }
     }
 
@@ -135,13 +139,14 @@ impl Options {
     /// ```
     ///   use dogstatsd::Options;
     ///
-    ///   let options = Options::new("127.0.0.1:9000", "127.0.0.1:9001", "");
+    ///   let options = Options::new("127.0.0.1:9000", "127.0.0.1:9001", "", vec!(String::new()));
     /// ```
-    pub fn new(from_addr: &str, to_addr: &str, namespace: &str) -> Self {
+    pub fn new(from_addr: &str, to_addr: &str, namespace: &str, default_tags: Vec<String>) -> Self {
         Options {
             from_addr: from_addr.into(),
             to_addr: to_addr.into(),
             namespace: namespace.into(),
+            default_tags: default_tags
         }
     }
 }
@@ -153,6 +158,7 @@ pub struct Client {
     from_addr: String,
     to_addr: String,
     namespace: String,
+    default_tags: Vec<u8>
 }
 
 impl PartialEq for Client {
@@ -160,7 +166,8 @@ impl PartialEq for Client {
         // Ignore `socket`, which will never be the same
         self.from_addr == other.from_addr &&
         self.to_addr == other.to_addr &&
-        self.namespace == other.namespace
+        self.namespace == other.namespace &&
+        self.default_tags == other.default_tags
     }
 }
 
@@ -180,6 +187,7 @@ impl Client {
             from_addr: options.from_addr,
             to_addr: options.to_addr,
             namespace: options.namespace,
+            default_tags: options.default_tags.join(",").into_bytes()
         })
     }
 
@@ -424,8 +432,8 @@ impl Client {
         where I: IntoIterator<Item=S>,
               M: Metric,
               S: AsRef<str>,
-    {
-        let formatted_metric = format_for_send(metric, &self.namespace, tags);
+    {        
+        let formatted_metric = format_for_send(metric, &self.namespace, tags, &self.default_tags);
         self.socket.send_to(formatted_metric.as_slice(), &self.to_addr)?;
         Ok(())
     }
@@ -442,6 +450,7 @@ mod tests {
             from_addr: "127.0.0.1:0".into(),
             to_addr: "127.0.0.1:8125".into(),
             namespace: String::new(),
+            ..Default::default()
         };
 
         assert_eq!(expected_options, options)
@@ -455,6 +464,22 @@ mod tests {
             from_addr: "127.0.0.1:0".into(),
             to_addr: "127.0.0.1:8125".into(),
             namespace: String::new(),
+            default_tags: String::new().into_bytes()
+        };
+
+        assert_eq!(expected_client, client)
+    }
+
+    #[test]
+    fn test_new_default_tags() {
+        let options = Options::new("127.0.0.1:0", "127.0.0.1:8125", "", vec!(String::from("tag1:tag1val")));
+        let client = Client::new(options).unwrap();
+        let expected_client = Client {
+            socket: UdpSocket::bind("127.0.0.1:0").unwrap(),
+            from_addr: "127.0.0.1:0".into(),
+            to_addr: "127.0.0.1:8125".into(),
+            namespace: String::new(),
+            default_tags: String::from("tag1:tag1val").into_bytes()
         };
 
         assert_eq!(expected_client, client)
@@ -463,7 +488,7 @@ mod tests {
     use metrics::GaugeMetric;
     #[test]
     fn test_send() {
-        let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "");
+        let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "", vec!());
         let client = Client::new(options).unwrap();
         // Shouldn't panic or error
         client.send(&GaugeMetric::new("gauge".into(), "1234".into()), &["tag1", "tag2"]).unwrap();
