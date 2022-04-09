@@ -22,8 +22,9 @@ pub fn format_for_send<M, I, S>(in_metric: &M, in_namespace: &str, tags: I, defa
 
     let mut tags_iter = tags.into_iter();
     let mut next_tag = tags_iter.next();
+    let has_tags = next_tag.is_some();
 
-    if next_tag.is_some() {
+    if next_tag.is_some() || !default_tags.is_empty() {
         buf.extend_from_slice(b"|#");
     }
 
@@ -38,7 +39,10 @@ pub fn format_for_send<M, I, S>(in_metric: &M, in_namespace: &str, tags: I, defa
     }
 
     if !default_tags.is_empty() {
-        buf.extend_from_slice(b",");
+        if has_tags {
+            buf.extend_from_slice(b",")
+        }
+
         buf.extend_from_slice(&default_tags);
     }
 
@@ -428,6 +432,14 @@ mod tests {
         assert_eq!(
             &b"_e{5,4}:title|text|#tag:1,tag:2"[..],
             &format_for_send(&Event::new("title".into(), "text".into()), "namespace", &["tag:1", "tag:2"], &String::default().into_bytes())[..]
+        )
+    }
+
+    #[test]
+    fn test_format_with_only_default_tags() {
+        assert_eq!(
+            &b"namespace.foo:1|c|#defaultag:3,seconddefault:4"[..],
+            &format_for_send(&CountMetric::Incr("foo"), "namespace", &[] as &[String], &String::from("defaultag:3,seconddefault:4").into_bytes())[..]
         )
     }
 
