@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 
-pub fn format_for_send<M, I, S>(in_metric: &M, in_namespace: &str, tags: I) -> Vec<u8>
+pub fn format_for_send<M, I, S>(in_metric: &M, in_namespace: &str, tags: I, default_tags: &Vec<u8>) -> Vec<u8>
     where M: Metric,
           I: IntoIterator<Item=S>,
           S: AsRef<str>,
@@ -22,8 +22,9 @@ pub fn format_for_send<M, I, S>(in_metric: &M, in_namespace: &str, tags: I) -> V
 
     let mut tags_iter = tags.into_iter();
     let mut next_tag = tags_iter.next();
+    let has_tags = next_tag.is_some();
 
-    if next_tag.is_some() {
+    if next_tag.is_some() || !default_tags.is_empty() {
         buf.extend_from_slice(b"|#");
     }
 
@@ -35,6 +36,14 @@ pub fn format_for_send<M, I, S>(in_metric: &M, in_namespace: &str, tags: I) -> V
         if next_tag.is_some() {
             buf.extend_from_slice(b",");
         }
+    }
+
+    if !default_tags.is_empty() {
+        if has_tags {
+            buf.extend_from_slice(b",")
+        }
+
+        buf.extend_from_slice(&default_tags);
     }
 
     buf
@@ -390,7 +399,7 @@ mod tests {
     fn test_format_for_send_no_tags() {
         assert_eq!(
             &b"namespace.foo:1|c"[..],
-            &format_for_send(&CountMetric::Incr("foo"), "namespace", &[] as &[String])[..]
+            &format_for_send(&CountMetric::Incr("foo"), "namespace", &[] as &[String], &String::default().into_bytes())[..]
         )
     }
 
@@ -398,15 +407,23 @@ mod tests {
     fn test_format_for_send_no_namespace() {
         assert_eq!(
             &b"foo:1|c|#tag:1,tag:2"[..],
-            &format_for_send(&CountMetric::Incr("foo"), "", &["tag:1", "tag:2"])[..]
+            &format_for_send(&CountMetric::Incr("foo"), "", &["tag:1", "tag:2"], &String::default().into_bytes())[..]
+        )
+    }
+
+    #[test]
+    fn test_format_for_no_default_tags() {
+        assert_eq!(
+            &b"namespace.foo:1|c|#tag:1,tag:2,defaultag:3,seconddefault:4"[..],
+            &format_for_send(&CountMetric::Incr("foo"), "namespace", &["tag:1", "tag:2"], &String::from("defaultag:3,seconddefault:4").into_bytes())[..]
         )
     }
 
     #[test]
     fn test_format_for_send_everything() {
         assert_eq!(
-            &b"namespace.foo:1|c|#tag:1,tag:2"[..],
-            &format_for_send(&CountMetric::Incr("foo"), "namespace", &["tag:1", "tag:2"])[..]
+            &b"namespace.foo:1|c|#tag:1,tag:2,defaultag:3,seconddefault:4"[..],
+            &format_for_send(&CountMetric::Incr("foo"), "namespace", &["tag:1", "tag:2"], &String::from("defaultag:3,seconddefault:4").into_bytes())[..]
         )
     }
 
@@ -414,7 +431,15 @@ mod tests {
     fn test_format_for_send_everything_omit_namespace() {
         assert_eq!(
             &b"_e{5,4}:title|text|#tag:1,tag:2"[..],
-            &format_for_send(&Event::new("title".into(), "text".into()), "namespace", &["tag:1", "tag:2"])[..]
+            &format_for_send(&Event::new("title".into(), "text".into()), "namespace", &["tag:1", "tag:2"], &String::default().into_bytes())[..]
+        )
+    }
+
+    #[test]
+    fn test_format_with_only_default_tags() {
+        assert_eq!(
+            &b"namespace.foo:1|c|#defaultag:3,seconddefault:4"[..],
+            &format_for_send(&CountMetric::Incr("foo"), "namespace", &[] as &[String], &String::from("defaultag:3,seconddefault:4").into_bytes())[..]
         )
     }
 
