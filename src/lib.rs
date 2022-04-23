@@ -87,6 +87,9 @@ pub use self::metrics::{ServiceStatus, ServiceCheckOptions};
 /// A type alias for returning a unit type or an error
 pub type DogstatsdResult = Result<(), DogstatsdError>;
 
+const DEFAULT_FROM_ADDR: &str = "127.0.0.1:0";
+const DEFAULT_TO_ADDR: &str = "127.0.0.1:8125";
+
 /// The struct that represents the options available for the Dogstatsd client.
 #[derive(Debug, PartialEq)]
 pub struct Options {
@@ -122,8 +125,8 @@ impl Default for Options {
     /// ```
     fn default() -> Self {
         Options {
-            from_addr: "127.0.0.1:0".into(),
-            to_addr: "127.0.0.1:8125".into(),
+            from_addr: DEFAULT_FROM_ADDR.into(),
+            to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
             default_tags: vec!()
         }
@@ -261,8 +264,8 @@ impl OptionsBuilder {
     /// ```
     pub fn build(&self) -> Options {
         Options::new(
-            &self.from_addr.as_ref().unwrap_or(&String::from("127.0.0.1:0")),
-            &self.to_addr.as_ref().unwrap_or(&String::from("127.0.0.1:8125")),
+            &self.from_addr.as_ref().unwrap_or(&String::from(DEFAULT_FROM_ADDR)),
+            &self.to_addr.as_ref().unwrap_or(&String::from(DEFAULT_TO_ADDR)),
             &self.namespace.as_ref().unwrap_or(&String::default()),
             self.default_tags.to_vec()
         )
@@ -565,8 +568,8 @@ mod tests {
     fn test_options_default() {
         let options = Options::default();
         let expected_options = Options {
-            from_addr: "127.0.0.1:0".into(),
-            to_addr: "127.0.0.1:8125".into(),
+            from_addr: DEFAULT_FROM_ADDR.into(),
+            to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
             ..Default::default()
         };
@@ -578,8 +581,8 @@ mod tests {
     fn test_options_builder_none() {
         let options = OptionsBuilder::new().build();
         let expected_options = Options {
-            from_addr: "127.0.0.1:0".into(),
-            to_addr: "127.0.0.1:8125".into(),
+            from_addr: DEFAULT_FROM_ADDR.into(),
+            to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
             ..Default::default()
         };
@@ -609,9 +612,9 @@ mod tests {
     fn test_new() {
         let client = Client::new(Options::default()).unwrap();
         let expected_client = Client {
-            socket: UdpSocket::bind("127.0.0.1:0").unwrap(),
-            from_addr: "127.0.0.1:0".into(),
-            to_addr: "127.0.0.1:8125".into(),
+            socket: UdpSocket::bind(DEFAULT_FROM_ADDR).unwrap(),
+            from_addr: DEFAULT_FROM_ADDR.into(),
+            to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
             default_tags: String::new().into_bytes()
         };
@@ -621,12 +624,12 @@ mod tests {
 
     #[test]
     fn test_new_default_tags() {
-        let options = Options::new("127.0.0.1:0", "127.0.0.1:8125", "", vec!(String::from("tag1:tag1val")));
+        let options = Options::new(DEFAULT_FROM_ADDR, DEFAULT_TO_ADDR, "", vec!(String::from("tag1:tag1val")));
         let client = Client::new(options).unwrap();
         let expected_client = Client {
-            socket: UdpSocket::bind("127.0.0.1:0").unwrap(),
-            from_addr: "127.0.0.1:0".into(),
-            to_addr: "127.0.0.1:8125".into(),
+            socket: UdpSocket::bind(DEFAULT_FROM_ADDR).unwrap(),
+            from_addr: DEFAULT_FROM_ADDR.into(),
+            to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
             default_tags: String::from("tag1:tag1val").into_bytes()
         };
