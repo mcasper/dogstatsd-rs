@@ -9,7 +9,7 @@
 //! Build an options struct and create a client:
 //!
 //! ```
-//! use dogstatsd::{Client, Options};
+//! use dogstatsd::{Client, Options, OptionsBuilder};
 //!
 //! // Binds to a udp socket on an available ephemeral port on 127.0.0.1 for
 //! // transmitting, and sends to  127.0.0.1:8125, the default dogstatsd
@@ -21,6 +21,10 @@
 //! // namespace of "analytics".
 //! let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics", vec!(String::new()));
 //! let custom_client = Client::new(custom_options).unwrap();
+//!
+//! // You can also use the OptionsBuilder API to avoid needing to specify every option.
+//! let built_options = OptionsBuilder::new().from_addr(String::from("127.0.0.1:9001")).build();
+//! let built_client = Client::new(built_options).unwrap();
 //! ```
 //!
 //! Start sending metrics:

@@ -23,9 +23,13 @@ let default_options = Options::default();
 let default_client = Client::new(default_options).unwrap();
 
 // Binds to 127.0.0.1:9000 for transmitting and sends to 10.1.2.3:8125, with a
-// namespace of "analytics", and a default tag of "region:west".
-let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics", "region:west");
+// namespace of "analytics".
+let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics", vec!(String::new()));
 let custom_client = Client::new(custom_options).unwrap();
+
+// You can also use the OptionsBuilder API to avoid needing to specify every option.
+let built_options = OptionsBuilder::new().from_addr(String::from("127.0.0.1:9001")).build();
+let built_client = Client::new(built_options).unwrap();
 ```
 
 Start sending metrics:

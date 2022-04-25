@@ -8,6 +8,12 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] - 2022-04-25
+
+### Added
+- OptionsBuilder API for more flexibly specifying client options - https://github.com/mcasper/dogstatsd-rs/pull/35
+- Ability to provide default tags that should be sent with all events - https://github.com/mcasper/dogstatsd-rs/pull/34
+
 ## [0.6.2] - 2021-01-26
 
 ### Fixed
