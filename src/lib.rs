@@ -73,7 +73,7 @@
 extern crate chrono;
 
 use chrono::Utc;
-use std::{net::UdpSocket};
+use std::net::UdpSocket;
 use std::borrow::Cow;
 
 mod error;
@@ -86,6 +86,9 @@ pub use self::metrics::{ServiceStatus, ServiceCheckOptions};
 
 /// A type alias for returning a unit type or an error
 pub type DogstatsdResult = Result<(), DogstatsdError>;
+
+const DEFAULT_FROM_ADDR: &str = "127.0.0.1:0";
+const DEFAULT_TO_ADDR: &str = "127.0.0.1:8125";
 
 /// The struct that represents the options available for the Dogstatsd client.
 #[derive(Debug, PartialEq)]
@@ -122,8 +125,8 @@ impl Default for Options {
     /// ```
     fn default() -> Self {
         Options {
-            from_addr: "127.0.0.1:0".into(),
-            to_addr: "127.0.0.1:8125".into(),
+            from_addr: DEFAULT_FROM_ADDR.into(),
+            to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
             default_tags: vec!()
         }
@@ -148,6 +151,124 @@ impl Options {
             namespace: namespace.into(),
             default_tags: default_tags
         }
+    }
+}
+
+/// Struct that allows build an `Options` for available for the Dogstatsd client.
+#[derive(Debug)]
+pub struct OptionsBuilder {
+    /// The address of the udp socket we'll bind to for sending.
+    from_addr: Option<String>,
+    /// The address of the udp socket we'll send metrics and events to.
+    to_addr: Option<String>,
+    /// A namespace to prefix all metrics with, joined with a '.'.
+    namespace: Option<String>,
+    /// Default tags to include with every request.
+    default_tags: Vec<String>
+}
+
+impl OptionsBuilder {
+    /// Create a new `OptionsBuilder` struct.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    ///   use dogstatsd::OptionsBuilder;
+    ///
+    ///   let options_builder = OptionsBuilder::new();
+    /// ```
+    pub fn new() -> Self {
+        Self {
+            from_addr: Option::None,
+            to_addr: Option::None,
+            namespace: Option::None,
+            default_tags: Vec::new()
+        }
+    }
+
+    /// Will allow the builder to generate an `Options` struct with the provided value.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    ///   use dogstatsd::OptionsBuilder;
+    ///
+    ///   let options_builder = OptionsBuilder::new().from_addr(String::from("127.0.0.1:9000"));
+    /// ```
+    pub fn from_addr<'a>(&'a mut self, from_addr: String) -> &'a mut OptionsBuilder {
+        self.from_addr = Some(from_addr);
+        self
+    }
+
+    /// Will allow the builder to generate an `Options` struct with the provided value.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    ///   use dogstatsd::OptionsBuilder;
+    ///
+    ///   let options_builder = OptionsBuilder::new().to_addr(String::from("127.0.0.1:9001"));
+    /// ```
+    pub fn to_addr<'a>(&'a mut self, to_addr: String) -> &'a mut OptionsBuilder {
+        self.to_addr = Some(to_addr);
+        self
+    }
+
+    /// Will allow the builder to generate an `Options` struct with the provided value.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    ///   use dogstatsd::OptionsBuilder;
+    ///
+    ///   let options_builder = OptionsBuilder::new().namespace(String::from("mynamespace"));
+    /// ```
+    pub fn namespace<'a>(&'a mut self, namespace: String) -> &'a mut OptionsBuilder {
+        self.namespace = Some(namespace);
+        self
+    }
+
+    /// Will allow the builder to generate an `Options` struct with the provided value. Can be called multiple times to add multiple `default_tags` to the `Options`.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    ///   use dogstatsd::OptionsBuilder;
+    ///
+    ///   let options_builder = OptionsBuilder::new().default_tag(String::from("tag1:tav1val")).default_tag(String::from("tag2:tag2val"));
+    /// ```
+    pub fn default_tag<'a>(&'a mut self, default_tag: String) -> &'a mut OptionsBuilder {
+        self.default_tags.push(default_tag);
+        self
+    }
+
+    /// Will construct an `Options` with all of the provided values and fall back to the default values if they aren't provided.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    ///   use dogstatsd::OptionsBuilder;
+    ///   use dogstatsd::Options;
+    ///
+    ///   let options = OptionsBuilder::new().namespace(String::from("mynamespace")).default_tag(String::from("tag1:tav1val")).build();
+    /// 
+    ///   assert_eq!(
+    ///       Options {
+    ///           from_addr: "127.0.0.1:0".into(),
+    ///           to_addr: "127.0.0.1:8125".into(),
+    ///           namespace: String::from("mynamespace"),
+    ///           default_tags: vec!(String::from("tag1:tav1val"))
+    ///       },
+    ///       options
+    ///   )
+    /// ```
+    pub fn build(&self) -> Options {
+        Options::new(
+            &self.from_addr.as_ref().unwrap_or(&String::from(DEFAULT_FROM_ADDR)),
+            &self.to_addr.as_ref().unwrap_or(&String::from(DEFAULT_TO_ADDR)),
+            &self.namespace.as_ref().unwrap_or(&String::default()),
+            self.default_tags.to_vec()
+        )
     }
 }
 
@@ -447,8 +568,8 @@ mod tests {
     fn test_options_default() {
         let options = Options::default();
         let expected_options = Options {
-            from_addr: "127.0.0.1:0".into(),
-            to_addr: "127.0.0.1:8125".into(),
+            from_addr: DEFAULT_FROM_ADDR.into(),
+            to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
             ..Default::default()
         };
@@ -457,12 +578,43 @@ mod tests {
     }
 
     #[test]
+    fn test_options_builder_none() {
+        let options = OptionsBuilder::new().build();
+        let expected_options = Options {
+            from_addr: DEFAULT_FROM_ADDR.into(),
+            to_addr: DEFAULT_TO_ADDR.into(),
+            namespace: String::new(),
+            ..Default::default()
+        };
+
+        assert_eq!(expected_options, options);
+    }
+
+    #[test]
+    fn teset_options_builder_all() {
+        let options = OptionsBuilder::new()
+            .from_addr("127.0.0.2:0".into())
+            .to_addr("127.0.0.2:8125".into())
+            .namespace("mynamespace".into())
+            .default_tag(String::from("tag1:tag1val"))
+            .build();
+        let expected_options = Options {
+            from_addr: "127.0.0.2:0".into(),
+            to_addr: "127.0.0.2:8125".into(),
+            namespace: "mynamespace".into(),
+            default_tags: vec!("tag1:tag1val".into()).to_vec()
+        };
+
+        assert_eq!(expected_options, options);
+    }
+
+    #[test]
     fn test_new() {
         let client = Client::new(Options::default()).unwrap();
         let expected_client = Client {
-            socket: UdpSocket::bind("127.0.0.1:0").unwrap(),
-            from_addr: "127.0.0.1:0".into(),
-            to_addr: "127.0.0.1:8125".into(),
+            socket: UdpSocket::bind(DEFAULT_FROM_ADDR).unwrap(),
+            from_addr: DEFAULT_FROM_ADDR.into(),
+            to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
             default_tags: String::new().into_bytes()
         };
@@ -472,12 +624,12 @@ mod tests {
 
     #[test]
     fn test_new_default_tags() {
-        let options = Options::new("127.0.0.1:0", "127.0.0.1:8125", "", vec!(String::from("tag1:tag1val")));
+        let options = Options::new(DEFAULT_FROM_ADDR, DEFAULT_TO_ADDR, "", vec!(String::from("tag1:tag1val")));
         let client = Client::new(options).unwrap();
         let expected_client = Client {
-            socket: UdpSocket::bind("127.0.0.1:0").unwrap(),
-            from_addr: "127.0.0.1:0".into(),
-            to_addr: "127.0.0.1:8125".into(),
+            socket: UdpSocket::bind(DEFAULT_FROM_ADDR).unwrap(),
+            from_addr: DEFAULT_FROM_ADDR.into(),
+            to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
             default_tags: String::from("tag1:tag1val").into_bytes()
         };
