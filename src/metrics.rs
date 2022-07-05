@@ -114,9 +114,9 @@ impl<'a> Metric for TimeMetric<'a> {
 impl<'a> TimeMetric<'a> {
     pub fn new(stat: &'a str, start_time: &'a DateTime<Utc>, end_time: &'a DateTime<Utc>) -> Self {
         TimeMetric {
-            start_time: start_time,
-            end_time: end_time,
-            stat: stat,
+            start_time,
+            end_time,
+            stat,
         }
     }
 }
@@ -142,8 +142,8 @@ impl<'a> Metric for TimingMetric<'a> {
 impl<'a> TimingMetric<'a> {
     pub fn new(stat: &'a str, ms: i64) -> Self {
         TimingMetric {
-            ms: ms,
-            stat: stat,
+            ms,
+            stat,
         }
     }
 }
@@ -168,8 +168,8 @@ impl<'a> Metric for GaugeMetric<'a> {
 impl<'a> GaugeMetric<'a> {
     pub fn new(stat: &'a str, val: &'a str) -> Self {
         GaugeMetric {
-            stat: stat,
-            val: val,
+            stat,
+            val,
         }
     }
 }
@@ -194,8 +194,8 @@ impl<'a> Metric for HistogramMetric<'a> {
 impl<'a> HistogramMetric<'a> {
     pub fn new(stat: &'a str, val: &'a str) -> Self {
         HistogramMetric {
-            stat: stat,
-            val: val,
+            stat,
+            val,
         }
     }
 }
@@ -220,8 +220,8 @@ impl<'a>Metric for DistributionMetric<'a> {
 impl<'a> DistributionMetric<'a> {
     pub fn new(stat: &'a str, val: &'a str) -> Self {
         DistributionMetric {
-            stat: stat,
-            val: val,
+            stat,
+            val,
         }
     }
 }
@@ -246,8 +246,8 @@ impl<'a> Metric for SetMetric<'a> {
 impl<'a> SetMetric<'a> {
     pub fn new(stat: &'a str, val: &'a str) -> Self {
         SetMetric {
-            stat: stat,
-            val: val,
+            stat,
+            val,
         }
     }
 }
@@ -348,9 +348,9 @@ impl<'a> Metric for ServiceCheck<'a> {
 impl<'a> ServiceCheck<'a> {
     pub fn new(stat: &'a str, val: ServiceStatus, options: ServiceCheckOptions) -> Self {
         ServiceCheck {
-            stat: stat,
-            val: val,
-            options: options,
+            stat,
+            val,
+            options,
         }
     }
 }
@@ -384,8 +384,8 @@ impl<'a> Metric for Event<'a> {
 impl<'a> Event<'a> {
     pub fn new(title: &'a str, text: &'a str) -> Self {
         Event {
-            title: title,
-            text: text,
+            title,
+            text,
         }
     }
 }

@@ -153,7 +153,7 @@ impl Options {
             from_addr: from_addr.into(),
             to_addr: to_addr.into(),
             namespace: namespace.into(),
-            default_tags: default_tags
+            default_tags
         }
     }
 }
