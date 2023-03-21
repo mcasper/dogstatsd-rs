@@ -277,7 +277,7 @@ impl ServiceStatus {
 }
 
 /// Struct for adding optional pieces to a service check
-#[derive(Clone, Copy, Debug)]
+#[derive(Default, Clone, Copy, Debug)]
 pub struct ServiceCheckOptions {
     /// An optional timestamp to include with the check
     pub timestamp: Option<i32>,
@@ -285,16 +285,6 @@ pub struct ServiceCheckOptions {
     pub hostname: Option<&'static str>,
     /// An optional message to include with the check
     pub message: Option<&'static str>,
-}
-
-impl Default for ServiceCheckOptions {
-    fn default() -> Self {
-        ServiceCheckOptions {
-            timestamp: None,
-            hostname: None,
-            message: None,
-        }
-    }
 }
 
 impl ServiceCheckOptions {
