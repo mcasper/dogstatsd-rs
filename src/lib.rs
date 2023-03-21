@@ -159,7 +159,7 @@ impl Options {
 }
 
 /// Struct that allows build an `Options` for available for the Dogstatsd client.
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct OptionsBuilder {
     /// The address of the udp socket we'll bind to for sending.
     from_addr: Option<String>,
@@ -182,12 +182,7 @@ impl OptionsBuilder {
     ///   let options_builder = OptionsBuilder::new();
     /// ```
     pub fn new() -> Self {
-        Self {
-            from_addr: Option::None,
-            to_addr: Option::None,
-            namespace: Option::None,
-            default_tags: Vec::new()
-        }
+        Self::default()
     }
 
     /// Will allow the builder to generate an `Options` struct with the provided value.
