@@ -268,9 +268,9 @@ impl OptionsBuilder {
     /// ```
     pub fn build(&self) -> Options {
         Options::new(
-            &self.from_addr.as_ref().unwrap_or(&String::from(DEFAULT_FROM_ADDR)),
-            &self.to_addr.as_ref().unwrap_or(&String::from(DEFAULT_TO_ADDR)),
-            &self.namespace.as_ref().unwrap_or(&String::default()),
+            self.from_addr.as_ref().unwrap_or(&String::from(DEFAULT_FROM_ADDR)),
+            self.to_addr.as_ref().unwrap_or(&String::from(DEFAULT_TO_ADDR)),
+            self.namespace.as_ref().unwrap_or(&String::default()),
             self.default_tags.to_vec()
         )
     }
