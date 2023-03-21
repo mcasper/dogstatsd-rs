@@ -43,7 +43,7 @@ pub fn format_for_send<M, I, S>(in_metric: &M, in_namespace: &str, tags: I, defa
             buf.extend_from_slice(b",")
         }
 
-        buf.extend_from_slice(&default_tags);
+        buf.extend_from_slice(default_tags);
     }
 
     buf
