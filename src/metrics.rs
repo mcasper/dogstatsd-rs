@@ -122,7 +122,7 @@ impl<'a> TimeMetric<'a> {
 }
 
 pub struct TimingMetric<'a> {
-    ms: i64,
+    ms: u64,
     stat: &'a str,
 }
 
@@ -140,7 +140,7 @@ impl<'a> Metric for TimingMetric<'a> {
 }
 
 impl<'a> TimingMetric<'a> {
-    pub fn new(stat: &'a str, ms: i64) -> Self {
+    pub fn new(stat: &'a str, ms: u64) -> Self {
         TimingMetric {
             ms,
             stat,

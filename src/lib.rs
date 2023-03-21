@@ -410,7 +410,7 @@ impl Client {
     ///   client.timing("timing", 350, &["tag:timing"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn timing<'a, I, S, T>(&self, stat: S, ms: i64, tags: I) -> DogstatsdResult
+    pub fn timing<'a, I, S, T>(&self, stat: S, ms: u64, tags: I) -> DogstatsdResult
         where I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
               T: AsRef<str>,
