@@ -387,16 +387,17 @@ impl Client {
     ///       thread::sleep(Duration::from_millis(200))
     ///   }).unwrap_or_else(|e| println!("Encountered error: {}", e))
     /// ```
-    pub fn time<'a, F, I, S, T>(&self, stat: S, tags: I, block: F) -> DogstatsdResult
-        where F: FnOnce(),
+    pub fn time<'a, F, O, I, S, T>(&self, stat: S, tags: I, block: F) -> Result<O, DogstatsdError>
+        where F: FnOnce() -> O,
               I: IntoIterator<Item=T>,
               S: Into<Cow<'a, str>>,
               T: AsRef<str>,
     {
         let start_time = Utc::now();
-        block();
+        let output = block();
         let end_time = Utc::now();
-        self.send(&TimeMetric::new(stat.into().as_ref(), &start_time, &end_time), tags)
+        self.send(&TimeMetric::new(stat.into().as_ref(), &start_time, &end_time), tags)?;
+        Ok(output)
     }
 
     /// Send your own timing metric in milliseconds
