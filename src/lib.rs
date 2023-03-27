@@ -159,7 +159,7 @@ impl Options {
 }
 
 /// Struct that allows build an `Options` for available for the Dogstatsd client.
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct OptionsBuilder {
     /// The address of the udp socket we'll bind to for sending.
     from_addr: Option<String>,
@@ -182,12 +182,7 @@ impl OptionsBuilder {
     ///   let options_builder = OptionsBuilder::new();
     /// ```
     pub fn new() -> Self {
-        Self {
-            from_addr: Option::None,
-            to_addr: Option::None,
-            namespace: Option::None,
-            default_tags: Vec::new()
-        }
+        Self::default()
     }
 
     /// Will allow the builder to generate an `Options` struct with the provided value.
@@ -199,7 +194,7 @@ impl OptionsBuilder {
     ///
     ///   let options_builder = OptionsBuilder::new().from_addr(String::from("127.0.0.1:9000"));
     /// ```
-    pub fn from_addr<'a>(&'a mut self, from_addr: String) -> &'a mut OptionsBuilder {
+    pub fn from_addr(&mut self, from_addr: String) -> &mut OptionsBuilder {
         self.from_addr = Some(from_addr);
         self
     }
@@ -213,7 +208,7 @@ impl OptionsBuilder {
     ///
     ///   let options_builder = OptionsBuilder::new().to_addr(String::from("127.0.0.1:9001"));
     /// ```
-    pub fn to_addr<'a>(&'a mut self, to_addr: String) -> &'a mut OptionsBuilder {
+    pub fn to_addr(&mut self, to_addr: String) -> &mut OptionsBuilder {
         self.to_addr = Some(to_addr);
         self
     }
@@ -227,7 +222,7 @@ impl OptionsBuilder {
     ///
     ///   let options_builder = OptionsBuilder::new().namespace(String::from("mynamespace"));
     /// ```
-    pub fn namespace<'a>(&'a mut self, namespace: String) -> &'a mut OptionsBuilder {
+    pub fn namespace(&mut self, namespace: String) -> &mut OptionsBuilder {
         self.namespace = Some(namespace);
         self
     }
@@ -241,7 +236,7 @@ impl OptionsBuilder {
     ///
     ///   let options_builder = OptionsBuilder::new().default_tag(String::from("tag1:tav1val")).default_tag(String::from("tag2:tag2val"));
     /// ```
-    pub fn default_tag<'a>(&'a mut self, default_tag: String) -> &'a mut OptionsBuilder {
+    pub fn default_tag(&mut self, default_tag: String) -> &mut OptionsBuilder {
         self.default_tags.push(default_tag);
         self
     }
@@ -268,9 +263,9 @@ impl OptionsBuilder {
     /// ```
     pub fn build(&self) -> Options {
         Options::new(
-            &self.from_addr.as_ref().unwrap_or(&String::from(DEFAULT_FROM_ADDR)),
-            &self.to_addr.as_ref().unwrap_or(&String::from(DEFAULT_TO_ADDR)),
-            &self.namespace.as_ref().unwrap_or(&String::default()),
+            self.from_addr.as_ref().unwrap_or(&String::from(DEFAULT_FROM_ADDR)),
+            self.to_addr.as_ref().unwrap_or(&String::from(DEFAULT_TO_ADDR)),
+            self.namespace.as_ref().unwrap_or(&String::default()),
             self.default_tags.to_vec()
         )
     }

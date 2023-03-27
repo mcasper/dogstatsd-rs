@@ -43,7 +43,7 @@ pub fn format_for_send<M, I, S>(in_metric: &M, in_namespace: &str, tags: I, defa
             buf.extend_from_slice(b",")
         }
 
-        buf.extend_from_slice(&default_tags);
+        buf.extend_from_slice(default_tags);
     }
 
     buf
@@ -83,7 +83,7 @@ impl<'a> Metric for CountMetric<'a> {
             CountMetric::Arbitrary(stat, amount) => {
                 let mut buf = String::with_capacity(3 + stat.len() + 23);
                 buf.push_str(stat);
-                buf.push_str(":");
+                buf.push(':');
                 buf.push_str(&amount.to_string());
                 buf.push_str("|c");
                 buf
@@ -104,7 +104,7 @@ impl<'a> Metric for TimeMetric<'a> {
         let dur = self.end_time.signed_duration_since(*self.start_time);
         let mut buf = String::with_capacity(3 + self.stat.len() + 11);
         buf.push_str(self.stat);
-        buf.push_str(":");
+        buf.push(':');
         buf.push_str(&dur.num_milliseconds().to_string());
         buf.push_str("|ms");
         buf
@@ -132,7 +132,7 @@ impl<'a> Metric for TimingMetric<'a> {
         let ms = self.ms.to_string();
         let mut buf = String::with_capacity(3 + self.stat.len() + ms.len());
         buf.push_str(self.stat);
-        buf.push_str(":");
+        buf.push(':');
         buf.push_str(&ms);
         buf.push_str("|ms");
         buf
@@ -158,7 +158,7 @@ impl<'a> Metric for GaugeMetric<'a> {
     fn metric_type_format(&self) -> String {
         let mut buf = String::with_capacity(3 + self.stat.len() + self.val.len());
         buf.push_str(self.stat);
-        buf.push_str(":");
+        buf.push(':');
         buf.push_str(self.val);
         buf.push_str("|g");
         buf
@@ -184,7 +184,7 @@ impl<'a> Metric for HistogramMetric<'a> {
     fn metric_type_format(&self) -> String {
         let mut buf = String::with_capacity(3 + self.stat.len() + self.val.len());
         buf.push_str(self.stat);
-        buf.push_str(":");
+        buf.push(':');
         buf.push_str(self.val);
         buf.push_str("|h");
         buf
@@ -210,7 +210,7 @@ impl<'a>Metric for DistributionMetric<'a> {
     fn metric_type_format(&self) -> String {
         let mut buf = String::with_capacity(3 + self.stat.len() + self.val.len());
         buf.push_str(self.stat);
-        buf.push_str(":");
+        buf.push(':');
         buf.push_str(self.val);
         buf.push_str("|d");
         buf
@@ -236,7 +236,7 @@ impl<'a> Metric for SetMetric<'a> {
     fn metric_type_format(&self) -> String {
         let mut buf = String::with_capacity(3 + self.stat.len() + self.val.len());
         buf.push_str(self.stat);
-        buf.push_str(":");
+        buf.push(':');
         buf.push_str(self.val);
         buf.push_str("|s");
         buf
@@ -277,7 +277,7 @@ impl ServiceStatus {
 }
 
 /// Struct for adding optional pieces to a service check
-#[derive(Clone, Copy, Debug)]
+#[derive(Default, Clone, Copy, Debug)]
 pub struct ServiceCheckOptions {
     /// An optional timestamp to include with the check
     pub timestamp: Option<i32>,
@@ -285,16 +285,6 @@ pub struct ServiceCheckOptions {
     pub hostname: Option<&'static str>,
     /// An optional message to include with the check
     pub message: Option<&'static str>,
-}
-
-impl Default for ServiceCheckOptions {
-    fn default() -> Self {
-        ServiceCheckOptions {
-            timestamp: None,
-            hostname: None,
-            message: None,
-        }
-    }
 }
 
 impl ServiceCheckOptions {
@@ -323,7 +313,7 @@ impl<'a> Metric for ServiceCheck<'a> {
         let mut buf = String::with_capacity(6 + self.stat.len() + self.options.len());
         buf.push_str("_sc|");
         buf.push_str(self.stat);
-        buf.push_str("|");
+        buf.push('|');
         buf.push_str(&format!("{}", self.val.to_int()));
 
         if self.options.timestamp.is_some() {
@@ -371,11 +361,11 @@ impl<'a> Metric for Event<'a> {
         let mut buf = String::with_capacity(self.title.len() + self.text.len() + title_len.len() + text_len.len() + 6);
         buf.push_str("_e{");
         buf.push_str(&title_len);
-        buf.push_str(",");
+        buf.push(',');
         buf.push_str(&text_len);
         buf.push_str("}:");
         buf.push_str(self.title);
-        buf.push_str("|");
+        buf.push('|');
         buf.push_str(self.text);
         buf
     }
