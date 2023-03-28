@@ -257,8 +257,8 @@ pub enum ServiceStatus {
 }
 
 impl ServiceStatus {
-    fn to_int(&self) -> i32 {
-        match *self {
+    fn to_int(self) -> i32 {
+        match self {
             ServiceStatus::OK => 0,
             ServiceStatus::Warning => 1,
             ServiceStatus::Critical => 2,
