@@ -1,9 +1,15 @@
 use chrono::{DateTime, Utc};
 
-pub fn format_for_send<M, I, S>(in_metric: &M, in_namespace: &str, tags: I, default_tags: &Vec<u8>) -> Vec<u8>
-    where M: Metric,
-          I: IntoIterator<Item=S>,
-          S: AsRef<str>,
+pub fn format_for_send<M, I, S>(
+    in_metric: &M,
+    in_namespace: &str,
+    tags: I,
+    default_tags: &Vec<u8>,
+) -> Vec<u8>
+where
+    M: Metric,
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
 {
     let metric = in_metric.metric_type_format();
     let namespace = if in_metric.uses_namespace() {
@@ -73,13 +79,13 @@ impl<'a> Metric for CountMetric<'a> {
                 buf.push_str(stat);
                 buf.push_str(":1|c");
                 buf
-            },
+            }
             CountMetric::Decr(stat) => {
                 let mut buf = String::with_capacity(3 + stat.len() + 5);
                 buf.push_str(stat);
                 buf.push_str(":-1|c");
                 buf
-            },
+            }
             CountMetric::Arbitrary(stat, amount) => {
                 let mut buf = String::with_capacity(3 + stat.len() + 23);
                 buf.push_str(stat);
@@ -141,10 +147,7 @@ impl<'a> Metric for TimingMetric<'a> {
 
 impl<'a> TimingMetric<'a> {
     pub fn new(stat: &'a str, ms: i64) -> Self {
-        TimingMetric {
-            ms,
-            stat,
-        }
+        TimingMetric { ms, stat }
     }
 }
 
@@ -167,10 +170,7 @@ impl<'a> Metric for GaugeMetric<'a> {
 
 impl<'a> GaugeMetric<'a> {
     pub fn new(stat: &'a str, val: &'a str) -> Self {
-        GaugeMetric {
-            stat,
-            val,
-        }
+        GaugeMetric { stat, val }
     }
 }
 
@@ -193,10 +193,7 @@ impl<'a> Metric for HistogramMetric<'a> {
 
 impl<'a> HistogramMetric<'a> {
     pub fn new(stat: &'a str, val: &'a str) -> Self {
-        HistogramMetric {
-            stat,
-            val,
-        }
+        HistogramMetric { stat, val }
     }
 }
 
@@ -205,7 +202,7 @@ pub struct DistributionMetric<'a> {
     val: &'a str,
 }
 
-impl<'a>Metric for DistributionMetric<'a> {
+impl<'a> Metric for DistributionMetric<'a> {
     // my_distribution:1000|d
     fn metric_type_format(&self) -> String {
         let mut buf = String::with_capacity(3 + self.stat.len() + self.val.len());
@@ -219,10 +216,7 @@ impl<'a>Metric for DistributionMetric<'a> {
 
 impl<'a> DistributionMetric<'a> {
     pub fn new(stat: &'a str, val: &'a str) -> Self {
-        DistributionMetric {
-            stat,
-            val,
-        }
+        DistributionMetric { stat, val }
     }
 }
 
@@ -245,10 +239,7 @@ impl<'a> Metric for SetMetric<'a> {
 
 impl<'a> SetMetric<'a> {
     pub fn new(stat: &'a str, val: &'a str) -> Self {
-        SetMetric {
-            stat,
-            val,
-        }
+        SetMetric { stat, val }
     }
 }
 
@@ -337,11 +328,7 @@ impl<'a> Metric for ServiceCheck<'a> {
 
 impl<'a> ServiceCheck<'a> {
     pub fn new(stat: &'a str, val: ServiceStatus, options: ServiceCheckOptions) -> Self {
-        ServiceCheck {
-            stat,
-            val,
-            options,
-        }
+        ServiceCheck { stat, val, options }
     }
 }
 
@@ -358,7 +345,9 @@ impl<'a> Metric for Event<'a> {
     fn metric_type_format(&self) -> String {
         let title_len = self.title.len().to_string();
         let text_len = self.text.len().to_string();
-        let mut buf = String::with_capacity(self.title.len() + self.text.len() + title_len.len() + text_len.len() + 6);
+        let mut buf = String::with_capacity(
+            self.title.len() + self.text.len() + title_len.len() + text_len.len() + 6,
+        );
         buf.push_str("_e{");
         buf.push_str(&title_len);
         buf.push(',');
@@ -373,23 +362,25 @@ impl<'a> Metric for Event<'a> {
 
 impl<'a> Event<'a> {
     pub fn new(title: &'a str, text: &'a str) -> Self {
-        Event {
-            title,
-            text,
-        }
+        Event { title, text }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use chrono::{TimeZone, Utc};
     use super::*;
+    use chrono::{TimeZone, Utc};
 
     #[test]
     fn test_format_for_send_no_tags() {
         assert_eq!(
             &b"namespace.foo:1|c"[..],
-            &format_for_send(&CountMetric::Incr("foo"), "namespace", &[] as &[String], &String::default().into_bytes())[..]
+            &format_for_send(
+                &CountMetric::Incr("foo"),
+                "namespace",
+                &[] as &[String],
+                &String::default().into_bytes()
+            )[..]
         )
     }
 
@@ -397,7 +388,12 @@ mod tests {
     fn test_format_for_send_no_namespace() {
         assert_eq!(
             &b"foo:1|c|#tag:1,tag:2"[..],
-            &format_for_send(&CountMetric::Incr("foo"), "", &["tag:1", "tag:2"], &String::default().into_bytes())[..]
+            &format_for_send(
+                &CountMetric::Incr("foo"),
+                "",
+                &["tag:1", "tag:2"],
+                &String::default().into_bytes()
+            )[..]
         )
     }
 
@@ -405,7 +401,12 @@ mod tests {
     fn test_format_for_no_default_tags() {
         assert_eq!(
             &b"namespace.foo:1|c|#tag:1,tag:2,defaultag:3,seconddefault:4"[..],
-            &format_for_send(&CountMetric::Incr("foo"), "namespace", &["tag:1", "tag:2"], &String::from("defaultag:3,seconddefault:4").into_bytes())[..]
+            &format_for_send(
+                &CountMetric::Incr("foo"),
+                "namespace",
+                &["tag:1", "tag:2"],
+                &String::from("defaultag:3,seconddefault:4").into_bytes()
+            )[..]
         )
     }
 
@@ -413,7 +414,12 @@ mod tests {
     fn test_format_for_send_everything() {
         assert_eq!(
             &b"namespace.foo:1|c|#tag:1,tag:2,defaultag:3,seconddefault:4"[..],
-            &format_for_send(&CountMetric::Incr("foo"), "namespace", &["tag:1", "tag:2"], &String::from("defaultag:3,seconddefault:4").into_bytes())[..]
+            &format_for_send(
+                &CountMetric::Incr("foo"),
+                "namespace",
+                &["tag:1", "tag:2"],
+                &String::from("defaultag:3,seconddefault:4").into_bytes()
+            )[..]
         )
     }
 
@@ -421,7 +427,12 @@ mod tests {
     fn test_format_for_send_everything_omit_namespace() {
         assert_eq!(
             &b"_e{5,4}:title|text|#tag:1,tag:2"[..],
-            &format_for_send(&Event::new("title".into(), "text".into()), "namespace", &["tag:1", "tag:2"], &String::default().into_bytes())[..]
+            &format_for_send(
+                &Event::new("title".into(), "text".into()),
+                "namespace",
+                &["tag:1", "tag:2"],
+                &String::default().into_bytes()
+            )[..]
         )
     }
 
@@ -429,7 +440,12 @@ mod tests {
     fn test_format_with_only_default_tags() {
         assert_eq!(
             &b"namespace.foo:1|c|#defaultag:3,seconddefault:4"[..],
-            &format_for_send(&CountMetric::Incr("foo"), "namespace", &[] as &[String], &String::from("defaultag:3,seconddefault:4").into_bytes())[..]
+            &format_for_send(
+                &CountMetric::Incr("foo"),
+                "namespace",
+                &[] as &[String],
+                &String::from("defaultag:3,seconddefault:4").into_bytes()
+            )[..]
         )
     }
 
@@ -503,7 +519,11 @@ mod tests {
 
     #[test]
     fn test_service_check() {
-        let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, ServiceCheckOptions::default());
+        let metric = ServiceCheck::new(
+            "redis.can_connect".into(),
+            ServiceStatus::Warning,
+            ServiceCheckOptions::default(),
+        );
 
         assert_eq!("_sc|redis.can_connect|1", metric.metric_type_format())
     }
@@ -516,7 +536,10 @@ mod tests {
         };
         let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, options);
 
-        assert_eq!("_sc|redis.can_connect|1|d:1234567890", metric.metric_type_format())
+        assert_eq!(
+            "_sc|redis.can_connect|1|d:1234567890",
+            metric.metric_type_format()
+        )
     }
 
     #[test]
@@ -527,7 +550,10 @@ mod tests {
         };
         let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, options);
 
-        assert_eq!("_sc|redis.can_connect|1|h:my_server.localhost", metric.metric_type_format())
+        assert_eq!(
+            "_sc|redis.can_connect|1|h:my_server.localhost",
+            metric.metric_type_format()
+        )
     }
 
     #[test]
@@ -538,7 +564,10 @@ mod tests {
         };
         let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, options);
 
-        assert_eq!("_sc|redis.can_connect|1|m:Service is possibly down", metric.metric_type_format())
+        assert_eq!(
+            "_sc|redis.can_connect|1|m:Service is possibly down",
+            metric.metric_type_format()
+        )
     }
 
     #[test]
@@ -546,7 +575,7 @@ mod tests {
         let options = ServiceCheckOptions {
             timestamp: Some(1234567890),
             hostname: Some("my_server.localhost"),
-            message: Some("Service is possibly down")
+            message: Some("Service is possibly down"),
         };
         let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, options);
 
@@ -558,7 +587,10 @@ mod tests {
 
     #[test]
     fn test_event() {
-        let metric = Event::new("Event Title".into(), "Event Body - Something Happened".into());
+        let metric = Event::new(
+            "Event Title".into(),
+            "Event Body - Something Happened".into(),
+        );
 
         assert_eq!(
             "_e{11,31}:Event Title|Event Body - Something Happened",
@@ -595,20 +627,16 @@ mod bench {
     fn bench_set_metric(b: &mut Bencher) {
         let metric = SetMetric {
             stat: "blahblahblah-blahblahblah",
-            val: "valuel"
+            val: "valuel",
         };
 
-        b.iter(|| {
-            metric.metric_type_format()
-        })
+        b.iter(|| metric.metric_type_format())
     }
 
     #[bench]
     fn bench_set_counter(b: &mut Bencher) {
         let metric = CountMetric::Incr("foo");
 
-        b.iter(|| {
-            metric.metric_type_format()
-        })
+        b.iter(|| metric.metric_type_format())
     }
 }
