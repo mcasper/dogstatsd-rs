@@ -79,6 +79,7 @@ extern crate chrono;
 use chrono::Utc;
 use std::net::UdpSocket;
 use std::borrow::Cow;
+use std::future::Future;
 
 mod error;
 pub use self::error::DogstatsdError;
@@ -393,6 +394,39 @@ impl Client {
         let end_time = Utc::now();
         self.send(&TimeMetric::new(stat.into().as_ref(), &start_time, &end_time), tags)?;
         Ok(output)
+    }
+
+    /// Time how long it takes for an async block of code to execute.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///   use dogstatsd::{Client, Options};
+    ///   use std::thread;
+    ///   use std::time::Duration;
+    ///
+    /// # async fn do_work() {}
+    ///   async fn timer() {
+    ///       let client = Client::new(Options::default()).unwrap();
+    ///       client.async_time("timer", &["tag:time"], async {
+    ///         do_work().await
+    ///       })
+    ///       .await
+    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e))
+    ///   }
+    /// ```
+    pub async fn async_time<'a, Fn, Fut, Out, I, S, T>(&self, stat: S, tags: I, block: Fn) -> Result<Out, DogstatsdError>
+        where Fn: FnOnce() -> Fut,
+              Fut: Future<Output=Out>,
+              I: IntoIterator<Item=T>,
+              S: Into<Cow<'a, str>>,
+              T: AsRef<str>,
+    {
+        let start_time = Utc::now();
+        let result: Out = block().await;
+        let end_time = Utc::now();
+        self.send(&TimeMetric::new(stat.into().as_ref(), &start_time, &end_time), tags)?;
+        Ok(result)
     }
 
     /// Send your own timing metric in milliseconds
