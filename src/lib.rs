@@ -405,10 +405,11 @@ impl Client {
     ///   use std::thread;
     ///   use std::time::Duration;
     ///
+    /// # async fn do_work() {}
     ///   async fn timer() {
     ///       let client = Client::new(Options::default()).unwrap();
-    ///       client.time("timer", &["tag:time"], || async {
-    ///           thread::sleep(Duration::from_millis(200))
+    ///       client.async_time("timer", &["tag:time"], async {
+    ///         do_work().await
     ///       })
     ///       .await
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e))
