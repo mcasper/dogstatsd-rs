@@ -73,13 +73,18 @@
 //! ```
 
 #![cfg_attr(feature = "unstable", feature(test))]
-#![deny(warnings, missing_debug_implementations, missing_copy_implementations, missing_docs)]
+#![deny(
+    warnings,
+    missing_debug_implementations,
+    missing_copy_implementations,
+    missing_docs
+)]
 extern crate chrono;
 
 use chrono::Utc;
-use std::net::UdpSocket;
 use std::borrow::Cow;
 use std::future::Future;
+use std::net::UdpSocket;
 
 mod error;
 pub use self::error::DogstatsdError;
@@ -87,7 +92,7 @@ pub use self::error::DogstatsdError;
 mod metrics;
 use self::metrics::*;
 
-pub use self::metrics::{ServiceStatus, ServiceCheckOptions};
+pub use self::metrics::{ServiceCheckOptions, ServiceStatus};
 
 /// A type alias for returning a unit type or an error
 pub type DogstatsdResult = Result<(), DogstatsdError>;
@@ -105,7 +110,7 @@ pub struct Options {
     /// A namespace to prefix all metrics with, joined with a '.'.
     pub namespace: String,
     /// Default tags to include with every request.
-    pub default_tags: Vec<String>
+    pub default_tags: Vec<String>,
 }
 
 impl Default for Options {
@@ -133,10 +138,9 @@ impl Default for Options {
             from_addr: DEFAULT_FROM_ADDR.into(),
             to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
-            default_tags: vec!()
+            default_tags: vec![],
         }
     }
-
 }
 
 impl Options {
@@ -154,7 +158,7 @@ impl Options {
             from_addr: from_addr.into(),
             to_addr: to_addr.into(),
             namespace: namespace.into(),
-            default_tags
+            default_tags,
         }
     }
 }
@@ -169,14 +173,14 @@ pub struct OptionsBuilder {
     /// A namespace to prefix all metrics with, joined with a '.'.
     namespace: Option<String>,
     /// Default tags to include with every request.
-    default_tags: Vec<String>
+    default_tags: Vec<String>,
 }
 
 impl OptionsBuilder {
     /// Create a new `OptionsBuilder` struct.
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     ///   use dogstatsd::OptionsBuilder;
     ///
@@ -187,9 +191,9 @@ impl OptionsBuilder {
     }
 
     /// Will allow the builder to generate an `Options` struct with the provided value.
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     ///   use dogstatsd::OptionsBuilder;
     ///
@@ -201,9 +205,9 @@ impl OptionsBuilder {
     }
 
     /// Will allow the builder to generate an `Options` struct with the provided value.
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     ///   use dogstatsd::OptionsBuilder;
     ///
@@ -215,9 +219,9 @@ impl OptionsBuilder {
     }
 
     /// Will allow the builder to generate an `Options` struct with the provided value.
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     ///   use dogstatsd::OptionsBuilder;
     ///
@@ -229,9 +233,9 @@ impl OptionsBuilder {
     }
 
     /// Will allow the builder to generate an `Options` struct with the provided value. Can be called multiple times to add multiple `default_tags` to the `Options`.
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     ///   use dogstatsd::OptionsBuilder;
     ///
@@ -243,15 +247,15 @@ impl OptionsBuilder {
     }
 
     /// Will construct an `Options` with all of the provided values and fall back to the default values if they aren't provided.
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     ///   use dogstatsd::OptionsBuilder;
     ///   use dogstatsd::Options;
     ///
     ///   let options = OptionsBuilder::new().namespace(String::from("mynamespace")).default_tag(String::from("tag1:tav1val")).build();
-    /// 
+    ///
     ///   assert_eq!(
     ///       Options {
     ///           from_addr: "127.0.0.1:0".into(),
@@ -264,10 +268,14 @@ impl OptionsBuilder {
     /// ```
     pub fn build(&self) -> Options {
         Options::new(
-            self.from_addr.as_ref().unwrap_or(&String::from(DEFAULT_FROM_ADDR)),
-            self.to_addr.as_ref().unwrap_or(&String::from(DEFAULT_TO_ADDR)),
+            self.from_addr
+                .as_ref()
+                .unwrap_or(&String::from(DEFAULT_FROM_ADDR)),
+            self.to_addr
+                .as_ref()
+                .unwrap_or(&String::from(DEFAULT_TO_ADDR)),
             self.namespace.as_ref().unwrap_or(&String::default()),
-            self.default_tags.to_vec()
+            self.default_tags.to_vec(),
         )
     }
 }
@@ -275,20 +283,21 @@ impl OptionsBuilder {
 /// The client struct that handles sending metrics to the Dogstatsd server.
 #[derive(Debug)]
 pub struct Client {
-    socket: UdpSocket,
+    socket: 
+,
     from_addr: String,
     to_addr: String,
     namespace: String,
-    default_tags: Vec<u8>
+    default_tags: Vec<u8>,
 }
 
 impl PartialEq for Client {
     fn eq(&self, other: &Self) -> bool {
         // Ignore `socket`, which will never be the same
-        self.from_addr == other.from_addr &&
-        self.to_addr == other.to_addr &&
-        self.namespace == other.namespace &&
-        self.default_tags == other.default_tags
+        self.from_addr == other.from_addr
+            && self.to_addr == other.to_addr
+            && self.namespace == other.namespace
+            && self.default_tags == other.default_tags
     }
 }
 
@@ -308,7 +317,7 @@ impl Client {
             from_addr: options.from_addr,
             to_addr: options.to_addr,
             namespace: options.namespace,
-            default_tags: options.default_tags.join(",").into_bytes()
+            default_tags: options.default_tags.join(",").into_bytes(),
         })
     }
 
@@ -324,9 +333,10 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn incr<'a, I, S, T>(&self, stat: S, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              S: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         self.send(&CountMetric::Incr(stat.into().as_ref()), tags)
     }
@@ -343,9 +353,10 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn decr<'a, I, S, T>(&self, stat: S, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              S: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         self.send(&CountMetric::Decr(stat.into().as_ref()), tags)
     }
@@ -362,9 +373,10 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn count<'a, I, S, T>(&self, stat: S, count: i64, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              S: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         self.send(&CountMetric::Arbitrary(stat.into().as_ref(), count), tags)
     }
@@ -384,15 +396,19 @@ impl Client {
     ///   }).unwrap_or_else(|e| println!("Encountered error: {}", e))
     /// ```
     pub fn time<'a, F, O, I, S, T>(&self, stat: S, tags: I, block: F) -> Result<O, DogstatsdError>
-        where F: FnOnce() -> O,
-              I: IntoIterator<Item=T>,
-              S: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+    where
+        F: FnOnce() -> O,
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         let start_time = Utc::now();
         let output = block();
         let end_time = Utc::now();
-        self.send(&TimeMetric::new(stat.into().as_ref(), &start_time, &end_time), tags)?;
+        self.send(
+            &TimeMetric::new(stat.into().as_ref(), &start_time, &end_time),
+            tags,
+        )?;
         Ok(output)
     }
 
@@ -441,9 +457,10 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn timing<'a, I, S, T>(&self, stat: S, ms: i64, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              S: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         self.send(&TimingMetric::new(stat.into().as_ref(), ms), tags)
     }
@@ -460,12 +477,16 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn gauge<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              S: Into<Cow<'a, str>>,
-              SS: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        SS: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
-        self.send(&GaugeMetric::new(stat.into().as_ref(), val.into().as_ref()), tags)
+        self.send(
+            &GaugeMetric::new(stat.into().as_ref(), val.into().as_ref()),
+            tags,
+        )
     }
 
     /// Report a value in a histogram
@@ -480,12 +501,16 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn histogram<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              S: Into<Cow<'a, str>>,
-              SS: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        SS: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
-        self.send(&HistogramMetric::new(stat.into().as_ref(), val.into().as_ref()), tags)
+        self.send(
+            &HistogramMetric::new(stat.into().as_ref(), val.into().as_ref()),
+            tags,
+        )
     }
 
     /// Report a value in a distribution
@@ -500,12 +525,16 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn distribution<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              S: Into<Cow<'a, str>>,
-              SS: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        SS: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
-        self.send(&DistributionMetric::new(stat.into().as_ref(), val.into().as_ref()), tags)
+        self.send(
+            &DistributionMetric::new(stat.into().as_ref(), val.into().as_ref()),
+            tags,
+        )
     }
 
     /// Report a value in a set
@@ -520,12 +549,16 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn set<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              S: Into<Cow<'a, str>>,
-              SS: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        SS: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
-        self.send(&SetMetric::new(stat.into().as_ref(), val.into().as_ref()), tags)
+        self.send(
+            &SetMetric::new(stat.into().as_ref(), val.into().as_ref()),
+            tags,
+        )
     }
 
     /// Report the status of a service
@@ -554,13 +587,23 @@ impl Client {
     ///   client.service_check("redis.can_connect", ServiceStatus::OK, &["tag:service"], Some(all_options))
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn service_check<'a, I, S, T>(&self, stat: S, val: ServiceStatus, tags: I, options: Option<ServiceCheckOptions>) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              S: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+    pub fn service_check<'a, I, S, T>(
+        &self,
+        stat: S,
+        val: ServiceStatus,
+        tags: I,
+        options: Option<ServiceCheckOptions>,
+    ) -> DogstatsdResult
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         let unwrapped_options = options.unwrap_or_default();
-        self.send(&ServiceCheck::new(stat.into().as_ref(), val, unwrapped_options), tags)
+        self.send(
+            &ServiceCheck::new(stat.into().as_ref(), val, unwrapped_options),
+            tags,
+        )
     }
 
     /// Send a custom event as a title and a body
@@ -575,21 +618,27 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn event<'a, I, S, SS, T>(&self, title: S, text: SS, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=T>,
-              S: Into<Cow<'a, str>>,
-              SS: Into<Cow<'a, str>>,
-              T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        SS: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
-        self.send(&Event::new(title.into().as_ref(), text.into().as_ref()), tags)
+        self.send(
+            &Event::new(title.into().as_ref(), text.into().as_ref()),
+            tags,
+        )
     }
 
     fn send<I, M, S>(&self, metric: &M, tags: I) -> DogstatsdResult
-        where I: IntoIterator<Item=S>,
-              M: Metric,
-              S: AsRef<str>,
-    {        
+    where
+        I: IntoIterator<Item = S>,
+        M: Metric,
+        S: AsRef<str>,
+    {
         let formatted_metric = format_for_send(metric, &self.namespace, tags, &self.default_tags);
-        self.socket.send_to(formatted_metric.as_slice(), &self.to_addr)?;
+        self.socket
+            .send_to(formatted_metric.as_slice(), &self.to_addr)?;
         Ok(())
     }
 }
@@ -636,7 +685,7 @@ mod tests {
             from_addr: "127.0.0.2:0".into(),
             to_addr: "127.0.0.2:8125".into(),
             namespace: "mynamespace".into(),
-            default_tags: vec!("tag1:tag1val".into()).to_vec()
+            default_tags: vec!["tag1:tag1val".into()].to_vec(),
         };
 
         assert_eq!(expected_options, options);
@@ -650,7 +699,7 @@ mod tests {
             from_addr: DEFAULT_FROM_ADDR.into(),
             to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
-            default_tags: String::new().into_bytes()
+            default_tags: String::new().into_bytes(),
         };
 
         assert_eq!(expected_client, client)
@@ -658,14 +707,19 @@ mod tests {
 
     #[test]
     fn test_new_default_tags() {
-        let options = Options::new(DEFAULT_FROM_ADDR, DEFAULT_TO_ADDR, "", vec!(String::from("tag1:tag1val")));
+        let options = Options::new(
+            DEFAULT_FROM_ADDR,
+            DEFAULT_TO_ADDR,
+            "",
+            vec![String::from("tag1:tag1val")],
+        );
         let client = Client::new(options).unwrap();
         let expected_client = Client {
             socket: UdpSocket::bind(DEFAULT_FROM_ADDR).unwrap(),
             from_addr: DEFAULT_FROM_ADDR.into(),
             to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
-            default_tags: String::from("tag1:tag1val").into_bytes()
+            default_tags: String::from("tag1:tag1val").into_bytes(),
         };
 
         assert_eq!(expected_client, client)
@@ -674,10 +728,15 @@ mod tests {
     use metrics::GaugeMetric;
     #[test]
     fn test_send() {
-        let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "", vec!());
+        let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "", vec![]);
         let client = Client::new(options).unwrap();
         // Shouldn't panic or error
-        client.send(&GaugeMetric::new("gauge".into(), "1234".into()), &["tag1", "tag2"]).unwrap();
+        client
+            .send(
+                &GaugeMetric::new("gauge".into(), "1234".into()),
+                &["tag1", "tag2"],
+            )
+            .unwrap();
     }
 }
 
@@ -750,7 +809,9 @@ mod bench {
         let tags = vec!["name1:value1"];
         let mut i = 0;
         b.iter(|| {
-            client.histogram("bench.histogram", &i.to_string(), &tags).unwrap();
+            client
+                .histogram("bench.histogram", &i.to_string(), &tags)
+                .unwrap();
             i += 1;
         })
     }
@@ -762,7 +823,9 @@ mod bench {
         let tags = vec!["name1:value1"];
         let mut i = 0;
         b.iter(|| {
-            client.distribution("bench.distribution", &i.to_string(), &tags).unwrap();
+            client
+                .distribution("bench.distribution", &i.to_string(), &tags)
+                .unwrap();
             i += 1;
         })
     }
@@ -787,10 +850,17 @@ mod bench {
         let all_options = ServiceCheckOptions {
             hostname: Some("my-host.localhost"),
             timestamp: Some(1510326433),
-            message: Some("Message about the check or service")
+            message: Some("Message about the check or service"),
         };
         b.iter(|| {
-            client.service_check("bench.service_check", ServiceStatus::Critical, &tags, Some(all_options)).unwrap();
+            client
+                .service_check(
+                    "bench.service_check",
+                    ServiceStatus::Critical,
+                    &tags,
+                    Some(all_options),
+                )
+                .unwrap();
         })
     }
 
@@ -800,7 +870,9 @@ mod bench {
         let client = Client::new(options).unwrap();
         let tags = vec!["name1:value1"];
         b.iter(|| {
-            client.event("Test Event Title", "Test Event Message", &tags).unwrap();
+            client
+                .event("Test Event Title", "Test Event Message", &tags)
+                .unwrap();
         })
     }
 }
