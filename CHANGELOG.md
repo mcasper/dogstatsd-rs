@@ -8,6 +8,12 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] - 2023-03-28
+
+### Added
+- Support for timing async functions - https://github.com/mcasper/dogstatsd-rs/pull/45
+- Support for returning a value from timed functions - https://github.com/mcasper/dogstatsd-rs/pull/42
+
 ## [0.7.1] - 2022-07-26
 
 ### Removed
