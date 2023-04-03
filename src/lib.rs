@@ -81,18 +81,18 @@
 )]
 extern crate chrono;
 
-use chrono::Utc;
 use std::borrow::Cow;
 use std::future::Future;
 use std::net::UdpSocket;
 
-mod error;
+use chrono::Utc;
+
 pub use self::error::DogstatsdError;
-
-mod metrics;
 use self::metrics::*;
-
 pub use self::metrics::{ServiceCheckOptions, ServiceStatus};
+
+mod error;
+mod metrics;
 
 /// A type alias for returning a unit type or an error
 pub type DogstatsdResult = Result<(), DogstatsdError>;
@@ -394,7 +394,12 @@ impl Client {
     ///       thread::sleep(Duration::from_millis(200))
     ///   }).unwrap_or_else(|e| println!("Encountered error: {}", e))
     /// ```
-    pub fn time<'a, F, O, I, S, T>(&self, stat: S, tags: I, block: F) -> Result<O, DogstatsdError>
+    pub fn time<'a, F, O, I, S, T>(
+        &self,
+        stat: S,
+        tags: I,
+        block: F,
+    ) -> Result<O, (O, DogstatsdError)>
     where
         F: FnOnce() -> O,
         I: IntoIterator<Item = T>,
@@ -404,11 +409,12 @@ impl Client {
         let start_time = Utc::now();
         let output = block();
         let end_time = Utc::now();
-        self.send(
-            &TimeMetric::new(stat.into().as_ref(), &start_time, &end_time),
-            tags,
-        )?;
-        Ok(output)
+        let stat = stat.into();
+        let metric = TimeMetric::new(stat.as_ref(), &start_time, &end_time);
+        match self.send(&metric, tags) {
+            Ok(()) => Ok(output),
+            Err(error) => Err((output, error)),
+        }
     }
 
     /// Time how long it takes for an async block of code to execute.
@@ -428,27 +434,30 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e))
     ///   }
     /// ```
-    pub async fn async_time<'a, Fn, Fut, Out, I, S, T>(
+    pub async fn async_time<'a, Fn, Fut, O, I, S, T>(
         &self,
         stat: S,
         tags: I,
         block: Fn,
-    ) -> Result<Out, DogstatsdError>
+    ) -> Result<O, (O, DogstatsdError)>
     where
         Fn: FnOnce() -> Fut,
-        Fut: Future<Output = Out>,
+        Fut: Future<Output = O>,
         I: IntoIterator<Item = T>,
         S: Into<Cow<'a, str>>,
         T: AsRef<str>,
     {
         let start_time = Utc::now();
-        let result: Out = block().await;
+        let output = block().await;
         let end_time = Utc::now();
-        self.send(
-            &TimeMetric::new(stat.into().as_ref(), &start_time, &end_time),
+        let stat = stat.into();
+        match self.send(
+            &TimeMetric::new(stat.as_ref(), &start_time, &end_time),
             tags,
-        )?;
-        Ok(result)
+        ) {
+            Ok(()) => Ok(output),
+            Err(error) => Err((output, error)),
+        }
     }
 
     /// Send your own timing metric in milliseconds
@@ -651,6 +660,8 @@ impl Client {
 
 #[cfg(test)]
 mod tests {
+    use metrics::GaugeMetric;
+
     use super::*;
 
     #[test]
@@ -731,7 +742,6 @@ mod tests {
         assert_eq!(expected_client, client)
     }
 
-    use metrics::GaugeMetric;
     #[test]
     fn test_send() {
         let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "", vec![]);
@@ -749,8 +759,10 @@ mod tests {
 #[cfg(all(feature = "unstable", test))]
 mod bench {
     extern crate test;
-    use self::test::Bencher;
+
     use super::*;
+
+    use self::test::Bencher;
 
     #[bench]
     fn bench_incr(b: &mut Bencher) {
