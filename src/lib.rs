@@ -97,7 +97,7 @@ pub use self::metrics::{ServiceCheckOptions, ServiceStatus};
 /// A type alias for returning a unit type or an error
 pub type DogstatsdResult = Result<(), DogstatsdError>;
 
-const DEFAULT_FROM_ADDR: &str = "127.0.0.1:0";
+const DEFAULT_FROM_ADDR: &str = "0.0.0.0:0";
 const DEFAULT_TO_ADDR: &str = "127.0.0.1:8125";
 
 /// The struct that represents the options available for the Dogstatsd client.
@@ -125,7 +125,7 @@ impl Default for Options {
     ///
     ///   assert_eq!(
     ///       Options {
-    ///           from_addr: "127.0.0.1:0".into(),
+    ///           from_addr: "0.0.0.0:0".into(),
     ///           to_addr: "127.0.0.1:8125".into(),
     ///           namespace: String::new(),
     ///           default_tags: vec!()
@@ -258,7 +258,7 @@ impl OptionsBuilder {
     ///
     ///   assert_eq!(
     ///       Options {
-    ///           from_addr: "127.0.0.1:0".into(),
+    ///           from_addr: "0.0.0.0:0".into(),
     ///           to_addr: "127.0.0.1:8125".into(),
     ///           namespace: String::from("mynamespace"),
     ///           default_tags: vec!(String::from("tag1:tav1val"))
