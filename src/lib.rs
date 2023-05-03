@@ -392,7 +392,7 @@ impl Client {
     ///   let client = Client::new(Options::default()).unwrap();
     ///   client.time("timer", &["tag:time"], || {
     ///       thread::sleep(Duration::from_millis(200))
-    ///   }).unwrap_or_else(|e| println!("Encountered error: {}", e))
+    ///   }).unwrap_or_else(|(_, e)| println!("Encountered error: {}", e))
     /// ```
     pub fn time<'a, F, O, I, S, T>(
         &self,
@@ -431,7 +431,7 @@ impl Client {
     ///       let client = Client::new(Options::default()).unwrap();
     ///       client.async_time("timer", &["tag:time"], do_work)
     ///       .await
-    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e))
+    ///       .unwrap_or_else(|(_, e)| println!("Encountered error: {}", e))
     ///   }
     /// ```
     pub async fn async_time<'a, Fn, Fut, O, I, S, T>(

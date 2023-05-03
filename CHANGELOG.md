@@ -8,6 +8,12 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.1] - 2023-05-03
+
+### Changed
+- The `time` and `async_time` functions now return the output in the event of an error - https://github.com/mcasper/dogstatsd-rs/pull/47
+- The default from address is now 0.0.0.0 - https://github.com/mcasper/dogstatsd-rs/pull/48
+
 ## [0.8.0] - 2023-03-28
 
 ### Added
