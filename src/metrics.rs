@@ -27,7 +27,7 @@ where
 
     buf.extend_from_slice(metric.as_bytes());
 
-    if sampling < 1.0{
+    if sampling < 1.0 {
         buf.extend_from_slice(b"|@");
         buf.extend_from_slice(sampling.to_string().as_bytes());
     }
