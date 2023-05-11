@@ -74,10 +74,10 @@
 
 #![cfg_attr(feature = "unstable", feature(test))]
 #![deny(
-    warnings,
-    missing_debug_implementations,
-    missing_copy_implementations,
-    missing_docs
+warnings,
+missing_debug_implementations,
+missing_copy_implementations,
+missing_docs
 )]
 extern crate chrono;
 
@@ -99,6 +99,7 @@ pub type DogstatsdResult = Result<(), DogstatsdError>;
 
 const DEFAULT_FROM_ADDR: &str = "0.0.0.0:0";
 const DEFAULT_TO_ADDR: &str = "127.0.0.1:8125";
+const DEFAULT_SAMPLING_RATE: f32 = 1.0;
 
 /// The struct that represents the options available for the Dogstatsd client.
 #[derive(Debug, PartialEq)]
@@ -111,6 +112,8 @@ pub struct Options {
     pub namespace: String,
     /// Default tags to include with every request.
     pub default_tags: Vec<String>,
+    /// The sample rate to use for all metrics.
+    pub sampling_rate: f32,
 }
 
 impl Default for Options {
@@ -128,7 +131,8 @@ impl Default for Options {
     ///           from_addr: "0.0.0.0:0".into(),
     ///           to_addr: "127.0.0.1:8125".into(),
     ///           namespace: String::new(),
-    ///           default_tags: vec!()
+    ///           default_tags: vec!(),
+    ///           sampling_rate: 1.0,
     ///       },
     ///       options
     ///   )
@@ -139,12 +143,13 @@ impl Default for Options {
             to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
             default_tags: vec![],
+            sampling_rate: 1.0,
         }
     }
 }
 
 impl Options {
-    /// Create a new options struct by supplying values for all fields.
+    /// Create a new options struct by supplying values for all fields but the sampling rate.
     ///
     /// # Examples
     ///
@@ -159,6 +164,26 @@ impl Options {
             to_addr: to_addr.into(),
             namespace: namespace.into(),
             default_tags,
+            sampling_rate: 1.0,
+        }
+    }
+
+    /// Create a new options struct by supplying values for all fields.
+    ///
+    /// # Examples
+    ///
+    /// /// ```
+    ///   use dogstatsd::Options;
+    ///
+    ///   let options = Options::new("127.0.0.1:9000", "127.0.0.1:9001", "", vec!(String::new()), 0.5);
+    /// ```
+    pub fn with_sampling_rate(from_addr: &str, to_addr: &str, namespace: &str, default_tags: Vec<String>, sampling_rate: f32) -> Self {
+        Options {
+            from_addr: from_addr.into(),
+            to_addr: to_addr.into(),
+            namespace: namespace.into(),
+            default_tags,
+            sampling_rate,
         }
     }
 }
@@ -174,6 +199,8 @@ pub struct OptionsBuilder {
     namespace: Option<String>,
     /// Default tags to include with every request.
     default_tags: Vec<String>,
+    /// The sample rate to use for all metrics.
+    sampling_rate: Option<f32>,
 }
 
 impl OptionsBuilder {
@@ -246,6 +273,19 @@ impl OptionsBuilder {
         self
     }
 
+    /// Will allow the builder to generate an `Options` struct with the provided value.
+    ///
+    /// # Examples
+    /// ```
+    ///   use dogstatsd::OptionsBuilder;
+    ///
+    ///   let options_builder = OptionsBuilder::new().sampling_rate(0.5);
+    /// ```
+    pub fn sampling_rate(&mut self, sampling_rate: f32) -> &mut OptionsBuilder {
+        self.sampling_rate = Some(sampling_rate);
+        self
+    }
+
     /// Will construct an `Options` with all of the provided values and fall back to the default values if they aren't provided.
     ///
     /// # Examples
@@ -254,20 +294,21 @@ impl OptionsBuilder {
     ///   use dogstatsd::OptionsBuilder;
     ///   use dogstatsd::Options;
     ///
-    ///   let options = OptionsBuilder::new().namespace(String::from("mynamespace")).default_tag(String::from("tag1:tav1val")).build();
+    ///   let options = OptionsBuilder::new().namespace(String::from("mynamespace")).default_tag(String::from("tag1:tav1val")).sampling_rate(0.75).build();
     ///
     ///   assert_eq!(
     ///       Options {
     ///           from_addr: "0.0.0.0:0".into(),
     ///           to_addr: "127.0.0.1:8125".into(),
     ///           namespace: String::from("mynamespace"),
-    ///           default_tags: vec!(String::from("tag1:tav1val"))
+    ///           default_tags: vec!(String::from("tag1:tav1val")),
+    ///           sampling_rate: 0.75,
     ///       },
     ///       options
     ///   )
     /// ```
     pub fn build(&self) -> Options {
-        Options::new(
+        Options::with_sampling_rate(
             self.from_addr
                 .as_ref()
                 .unwrap_or(&String::from(DEFAULT_FROM_ADDR)),
@@ -276,6 +317,7 @@ impl OptionsBuilder {
                 .unwrap_or(&String::from(DEFAULT_TO_ADDR)),
             self.namespace.as_ref().unwrap_or(&String::default()),
             self.default_tags.to_vec(),
+            self.sampling_rate.unwrap_or(DEFAULT_SAMPLING_RATE),
         )
     }
 }
@@ -288,6 +330,7 @@ pub struct Client {
     to_addr: String,
     namespace: String,
     default_tags: Vec<u8>,
+    sampling_rate: f32,
 }
 
 impl PartialEq for Client {
@@ -317,6 +360,7 @@ impl Client {
             to_addr: options.to_addr,
             namespace: options.namespace,
             default_tags: options.default_tags.join(",").into_bytes(),
+            sampling_rate: options.sampling_rate,
         })
     }
 
@@ -332,10 +376,10 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn incr<'a, I, S, T>(&self, stat: S, tags: I) -> DogstatsdResult
-    where
-        I: IntoIterator<Item = T>,
-        S: Into<Cow<'a, str>>,
-        T: AsRef<str>,
+        where
+            I: IntoIterator<Item=T>,
+            S: Into<Cow<'a, str>>,
+            T: AsRef<str>,
     {
         self.send(&CountMetric::Incr(stat.into().as_ref()), tags)
     }
@@ -352,10 +396,10 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn decr<'a, I, S, T>(&self, stat: S, tags: I) -> DogstatsdResult
-    where
-        I: IntoIterator<Item = T>,
-        S: Into<Cow<'a, str>>,
-        T: AsRef<str>,
+        where
+            I: IntoIterator<Item=T>,
+            S: Into<Cow<'a, str>>,
+            T: AsRef<str>,
     {
         self.send(&CountMetric::Decr(stat.into().as_ref()), tags)
     }
@@ -372,10 +416,10 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn count<'a, I, S, T>(&self, stat: S, count: i64, tags: I) -> DogstatsdResult
-    where
-        I: IntoIterator<Item = T>,
-        S: Into<Cow<'a, str>>,
-        T: AsRef<str>,
+        where
+            I: IntoIterator<Item=T>,
+            S: Into<Cow<'a, str>>,
+            T: AsRef<str>,
     {
         self.send(&CountMetric::Arbitrary(stat.into().as_ref(), count), tags)
     }
@@ -400,11 +444,11 @@ impl Client {
         tags: I,
         block: F,
     ) -> Result<O, (O, DogstatsdError)>
-    where
-        F: FnOnce() -> O,
-        I: IntoIterator<Item = T>,
-        S: Into<Cow<'a, str>>,
-        T: AsRef<str>,
+        where
+            F: FnOnce() -> O,
+            I: IntoIterator<Item=T>,
+            S: Into<Cow<'a, str>>,
+            T: AsRef<str>,
     {
         let start_time = Utc::now();
         let output = block();
@@ -440,12 +484,12 @@ impl Client {
         tags: I,
         block: Fn,
     ) -> Result<O, (O, DogstatsdError)>
-    where
-        Fn: FnOnce() -> Fut,
-        Fut: Future<Output = O>,
-        I: IntoIterator<Item = T>,
-        S: Into<Cow<'a, str>>,
-        T: AsRef<str>,
+        where
+            Fn: FnOnce() -> Fut,
+            Fut: Future<Output=O>,
+            I: IntoIterator<Item=T>,
+            S: Into<Cow<'a, str>>,
+            T: AsRef<str>,
     {
         let start_time = Utc::now();
         let output = block().await;
@@ -472,10 +516,10 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn timing<'a, I, S, T>(&self, stat: S, ms: i64, tags: I) -> DogstatsdResult
-    where
-        I: IntoIterator<Item = T>,
-        S: Into<Cow<'a, str>>,
-        T: AsRef<str>,
+        where
+            I: IntoIterator<Item=T>,
+            S: Into<Cow<'a, str>>,
+            T: AsRef<str>,
     {
         self.send(&TimingMetric::new(stat.into().as_ref(), ms), tags)
     }
@@ -492,11 +536,11 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn gauge<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
-    where
-        I: IntoIterator<Item = T>,
-        S: Into<Cow<'a, str>>,
-        SS: Into<Cow<'a, str>>,
-        T: AsRef<str>,
+        where
+            I: IntoIterator<Item=T>,
+            S: Into<Cow<'a, str>>,
+            SS: Into<Cow<'a, str>>,
+            T: AsRef<str>,
     {
         self.send(
             &GaugeMetric::new(stat.into().as_ref(), val.into().as_ref()),
@@ -516,11 +560,11 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn histogram<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
-    where
-        I: IntoIterator<Item = T>,
-        S: Into<Cow<'a, str>>,
-        SS: Into<Cow<'a, str>>,
-        T: AsRef<str>,
+        where
+            I: IntoIterator<Item=T>,
+            S: Into<Cow<'a, str>>,
+            SS: Into<Cow<'a, str>>,
+            T: AsRef<str>,
     {
         self.send(
             &HistogramMetric::new(stat.into().as_ref(), val.into().as_ref()),
@@ -540,11 +584,11 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn distribution<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
-    where
-        I: IntoIterator<Item = T>,
-        S: Into<Cow<'a, str>>,
-        SS: Into<Cow<'a, str>>,
-        T: AsRef<str>,
+        where
+            I: IntoIterator<Item=T>,
+            S: Into<Cow<'a, str>>,
+            SS: Into<Cow<'a, str>>,
+            T: AsRef<str>,
     {
         self.send(
             &DistributionMetric::new(stat.into().as_ref(), val.into().as_ref()),
@@ -564,11 +608,11 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn set<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
-    where
-        I: IntoIterator<Item = T>,
-        S: Into<Cow<'a, str>>,
-        SS: Into<Cow<'a, str>>,
-        T: AsRef<str>,
+        where
+            I: IntoIterator<Item=T>,
+            S: Into<Cow<'a, str>>,
+            SS: Into<Cow<'a, str>>,
+            T: AsRef<str>,
     {
         self.send(
             &SetMetric::new(stat.into().as_ref(), val.into().as_ref()),
@@ -609,10 +653,10 @@ impl Client {
         tags: I,
         options: Option<ServiceCheckOptions>,
     ) -> DogstatsdResult
-    where
-        I: IntoIterator<Item = T>,
-        S: Into<Cow<'a, str>>,
-        T: AsRef<str>,
+        where
+            I: IntoIterator<Item=T>,
+            S: Into<Cow<'a, str>>,
+            T: AsRef<str>,
     {
         let unwrapped_options = options.unwrap_or_default();
         self.send(
@@ -633,11 +677,11 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn event<'a, I, S, SS, T>(&self, title: S, text: SS, tags: I) -> DogstatsdResult
-    where
-        I: IntoIterator<Item = T>,
-        S: Into<Cow<'a, str>>,
-        SS: Into<Cow<'a, str>>,
-        T: AsRef<str>,
+        where
+            I: IntoIterator<Item=T>,
+            S: Into<Cow<'a, str>>,
+            SS: Into<Cow<'a, str>>,
+            T: AsRef<str>,
     {
         self.send(
             &Event::new(title.into().as_ref(), text.into().as_ref()),
@@ -646,12 +690,15 @@ impl Client {
     }
 
     fn send<I, M, S>(&self, metric: &M, tags: I) -> DogstatsdResult
-    where
-        I: IntoIterator<Item = S>,
-        M: Metric,
-        S: AsRef<str>,
+        where
+            I: IntoIterator<Item=S>,
+            M: Metric,
+            S: AsRef<str>,
     {
-        let formatted_metric = format_for_send(metric, &self.namespace, tags, &self.default_tags);
+        if self.sampling_rate < 1.0 && rand::random::<f32>() > self.sampling_rate {
+            return Ok(());
+        }
+        let formatted_metric = format_for_send(metric, &self.namespace, tags, self.sampling_rate, &self.default_tags);
         self.socket
             .send_to(formatted_metric.as_slice(), &self.to_addr)?;
         Ok(())
@@ -697,12 +744,14 @@ mod tests {
             .to_addr("127.0.0.2:8125".into())
             .namespace("mynamespace".into())
             .default_tag(String::from("tag1:tag1val"))
+            .sampling_rate(0.75)
             .build();
         let expected_options = Options {
             from_addr: "127.0.0.2:0".into(),
             to_addr: "127.0.0.2:8125".into(),
             namespace: "mynamespace".into(),
             default_tags: vec!["tag1:tag1val".into()].to_vec(),
+            sampling_rate: 0.75,
         };
 
         assert_eq!(expected_options, options);
@@ -717,6 +766,7 @@ mod tests {
             to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
             default_tags: String::new().into_bytes(),
+            sampling_rate: 1.0,
         };
 
         assert_eq!(expected_client, client)
@@ -737,6 +787,7 @@ mod tests {
             to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
             default_tags: String::from("tag1:tag1val").into_bytes(),
+            sampling_rate: 1.0,
         };
 
         assert_eq!(expected_client, client)
