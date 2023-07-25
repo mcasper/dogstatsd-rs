@@ -64,8 +64,8 @@ pub trait Metric {
 }
 
 pub enum CountMetric<'a> {
-    Incr(&'a str),
-    Decr(&'a str),
+    Incr(&'a str, i64),
+    Decr(&'a str, i64),
     Arbitrary(&'a str, i64),
 }
 
@@ -74,16 +74,16 @@ impl<'a> Metric for CountMetric<'a> {
     // my_count:-1|c
     fn metric_type_format(&self) -> String {
         match *self {
-            CountMetric::Incr(stat) => {
+            CountMetric::Incr(stat, amount) => {
                 let mut buf = String::with_capacity(3 + stat.len() + 4);
                 buf.push_str(stat);
-                buf.push_str(":1|c");
+                buf.push_str(&format!(":{}|c", amount));
                 buf
             }
-            CountMetric::Decr(stat) => {
+            CountMetric::Decr(stat, amount) => {
                 let mut buf = String::with_capacity(3 + stat.len() + 5);
                 buf.push_str(stat);
-                buf.push_str(":-1|c");
+                buf.push_str(&format!(":{}|c", amount * -1));
                 buf
             }
             CountMetric::Arbitrary(stat, amount) => {
@@ -376,7 +376,20 @@ mod tests {
         assert_eq!(
             &b"namespace.foo:1|c"[..],
             &format_for_send(
-                &CountMetric::Incr("foo"),
+                &CountMetric::Incr("foo", 1),
+                "namespace",
+                &[] as &[String],
+                &String::default().into_bytes()
+            )[..]
+        )
+    }
+
+    #[test]
+    fn test_format_for_optional_value_in_increment() {
+        assert_eq!(
+            &b"namespace.foo:20|c"[..],
+            &format_for_send(
+                &CountMetric::Incr("foo", 20),
                 "namespace",
                 &[] as &[String],
                 &String::default().into_bytes()
@@ -389,7 +402,7 @@ mod tests {
         assert_eq!(
             &b"foo:1|c|#tag:1,tag:2"[..],
             &format_for_send(
-                &CountMetric::Incr("foo"),
+                &CountMetric::Incr("foo", 1),
                 "",
                 &["tag:1", "tag:2"],
                 &String::default().into_bytes()
@@ -402,7 +415,7 @@ mod tests {
         assert_eq!(
             &b"namespace.foo:1|c|#tag:1,tag:2,defaultag:3,seconddefault:4"[..],
             &format_for_send(
-                &CountMetric::Incr("foo"),
+                &CountMetric::Incr("foo", 1),
                 "namespace",
                 &["tag:1", "tag:2"],
                 &String::from("defaultag:3,seconddefault:4").into_bytes()
@@ -415,7 +428,7 @@ mod tests {
         assert_eq!(
             &b"namespace.foo:1|c|#tag:1,tag:2,defaultag:3,seconddefault:4"[..],
             &format_for_send(
-                &CountMetric::Incr("foo"),
+                &CountMetric::Incr("foo", 1),
                 "namespace",
                 &["tag:1", "tag:2"],
                 &String::from("defaultag:3,seconddefault:4").into_bytes()
@@ -441,7 +454,7 @@ mod tests {
         assert_eq!(
             &b"namespace.foo:1|c|#defaultag:3,seconddefault:4"[..],
             &format_for_send(
-                &CountMetric::Incr("foo"),
+                &CountMetric::Incr("foo", 1),
                 "namespace",
                 &[] as &[String],
                 &String::from("defaultag:3,seconddefault:4").into_bytes()
@@ -451,16 +464,23 @@ mod tests {
 
     #[test]
     fn test_count_incr_metric() {
-        let metric = CountMetric::Incr("incr".into());
+        let metric = CountMetric::Incr("incr".into(), 1);
 
         assert_eq!("incr:1|c", metric.metric_type_format())
     }
 
     #[test]
     fn test_count_decr_metric() {
-        let metric = CountMetric::Decr("decr".into());
+        let metric = CountMetric::Decr("decr".into(), 1);
 
         assert_eq!("decr:-1|c", metric.metric_type_format())
+    }
+
+    #[test]
+    fn test_count_decr_by_value_metric() {
+        let metric = CountMetric::Decr("decr".into(), 35);
+
+        assert_eq!("decr:-35|c", metric.metric_type_format())
     }
 
     #[test]
