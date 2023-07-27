@@ -83,7 +83,7 @@ impl<'a> Metric for CountMetric<'a> {
             CountMetric::Decr(stat, amount) => {
                 let mut buf = String::with_capacity(3 + stat.len() + amount.to_string().len() + 4);
                 buf.push_str(stat);
-                buf.push_str(&format!(":{}|c", amount * -1));
+                buf.push_str(&format!(":{}|c", -amount));
                 buf
             }
             CountMetric::Arbitrary(stat, amount) => {
