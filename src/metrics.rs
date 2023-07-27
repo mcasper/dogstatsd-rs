@@ -75,13 +75,13 @@ impl<'a> Metric for CountMetric<'a> {
     fn metric_type_format(&self) -> String {
         match *self {
             CountMetric::Incr(stat, amount) => {
-                let mut buf = String::with_capacity(3 + stat.len() + amount.to_string().len() + 4);
+                let mut buf = String::with_capacity(3 + stat.len() + amount.to_string().len() + 3);
                 buf.push_str(stat);
                 buf.push_str(&format!(":{}|c", amount));
                 buf
             }
             CountMetric::Decr(stat, amount) => {
-                let mut buf = String::with_capacity(3 + stat.len() + amount.to_string().len() + 5);
+                let mut buf = String::with_capacity(3 + stat.len() + amount.to_string().len() + 4);
                 buf.push_str(stat);
                 buf.push_str(&format!(":{}|c", amount * -1));
                 buf

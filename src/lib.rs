@@ -388,7 +388,7 @@ impl Client {
     ///   use dogstatsd::{Client, Options};
     ///
     ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.decr("counter", 23, &["tag:counter"])
+    ///   client.decr_by_value("counter", 23, &["tag:counter"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn decr_by_value<'a, I, S, T>(&self, stat: S, value: i64, tags: I) -> DogstatsdResult
