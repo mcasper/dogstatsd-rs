@@ -337,7 +337,27 @@ impl Client {
         S: Into<Cow<'a, str>>,
         T: AsRef<str>,
     {
-        self.send(&CountMetric::Incr(stat.into().as_ref()), tags)
+        self.send(&CountMetric::Incr(stat.into().as_ref(), 1), tags)
+    }
+
+    /// Increment a StatsD counter by the provided amount
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///   use dogstatsd::{Client, Options};
+    ///
+    ///   let client = Client::new(Options::default()).unwrap();
+    ///   client.incr_by_value("counter", 123, &["tag:counter"])
+    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    /// ```
+    pub fn incr_by_value<'a, I, S, T>(&self, stat: S, value: i64, tags: I) -> DogstatsdResult
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
+    {
+        self.send(&CountMetric::Incr(stat.into().as_ref(), value), tags)
     }
 
     /// Decrement a StatsD counter
@@ -357,7 +377,27 @@ impl Client {
         S: Into<Cow<'a, str>>,
         T: AsRef<str>,
     {
-        self.send(&CountMetric::Decr(stat.into().as_ref()), tags)
+        self.send(&CountMetric::Decr(stat.into().as_ref(), 1), tags)
+    }
+
+    /// Decrement a StatsD counter by the provided amount
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///   use dogstatsd::{Client, Options};
+    ///
+    ///   let client = Client::new(Options::default()).unwrap();
+    ///   client.decr_by_value("counter", 23, &["tag:counter"])
+    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    /// ```
+    pub fn decr_by_value<'a, I, S, T>(&self, stat: S, value: i64, tags: I) -> DogstatsdResult
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
+    {
+        self.send(&CountMetric::Decr(stat.into().as_ref(), value), tags)
     }
 
     /// Make an arbitrary change to a StatsD counter
