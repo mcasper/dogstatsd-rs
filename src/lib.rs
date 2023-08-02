@@ -197,6 +197,22 @@ impl Options {
             batching_options,
         }
     }
+
+    fn default_system_tags() -> Vec<(String, String)> {
+        let mut system_tags = vec![];
+
+        if let Ok(env) = std::env::var("DD_ENV") {
+            system_tags.push(("env".to_string(), env));
+        }
+        if let Ok(service) = std::env::var("DD_SERVICE") {
+            system_tags.push(("service".to_string(), service));
+        }
+        if let Ok(version) = std::env::var("DD_VERSION") {
+            system_tags.push(("version".to_string(), version));
+        }
+
+        system_tags
+    }
 }
 
 /// Struct that allows build an `Options` for available for the Dogstatsd client.
@@ -293,7 +309,7 @@ impl OptionsBuilder {
     /// ```
     ///   use dogstatsd::OptionsBuilder;
     ///
-    ///   let options_builder = OptionsBuilder::new().default_tag(String::from("tag1:tav1val")).default_tag(String::from("tag2:tag2val"));
+    ///   let options_builder = OptionsBuilder::new().default_tag(String::from("tag1"), String::from("tav1val")).default_tag(String::from("tag2"), String::from("tav2val"));
     /// ```
     pub fn socket_path(&mut self, socket_path: Option<String>) -> &mut OptionsBuilder {
         self.socket_path = socket_path;
@@ -452,9 +468,14 @@ impl Client {
             }
         };
 
-        let formatted_tags: Vec<String> = options.default_tags.iter().map(|(key, value)| format!("{}:{}", key, value)).collect();
+        let mut default_tags = options.default_tags;
+        // Prepending default tags in order to let the user be able to override system tags with custom
+        // default tags
+        default_tags.extend(Options::default_system_tags());
+        default_tags.sort_by(|(key_a, _), (key_b, _)| key_a.cmp(key_b));
+        default_tags.dedup_by(|(key_a, _), (key_b, _)| key_a == key_b);
 
-        // SIMO
+        let formatted_tags: Vec<String> = default_tags.iter().map(|(key, value)| format!("{}:{}", key, value)).collect();
 
         Ok(Client {
             socket,
@@ -1073,6 +1094,30 @@ mod tests {
     }
 
     #[test]
+    fn test_system_tags() {
+        let options = Options::new(
+            DEFAULT_FROM_ADDR,
+            DEFAULT_TO_ADDR,
+            "",
+            vec![(String::from("tag1"), String::from("tag1val")), (String::from("version"), String::from("0.0.2"))],
+            None,
+            None,
+        );
+
+        let client = with_default_system_tags(|| Client::new(options).unwrap());
+
+        let expected_client = Client {
+            socket: SocketType::Udp(UdpSocket::bind(DEFAULT_FROM_ADDR).unwrap()),
+            from_addr: DEFAULT_FROM_ADDR.into(),
+            to_addr: DEFAULT_TO_ADDR.into(),
+            namespace: String::new(),
+            default_tags: String::from("env:production,service:service,tag1:tag1val,version:0.0.2").into_bytes(),
+        };
+
+        assert_eq!(expected_client, client)
+    }
+
+    #[test]
     fn test_send() {
         let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "", vec![], None, None);
         let client = Client::new(options).unwrap();
@@ -1083,6 +1128,17 @@ mod tests {
                 &["tag1", "tag2"],
             )
             .unwrap();
+    }
+
+    fn with_default_system_tags<T, F: FnOnce() -> T>(f: F) -> T {
+        std::env::set_var("DD_ENV", "production");
+        std::env::set_var("DD_SERVICE", "service");
+        std::env::set_var("DD_VERSION", "0.0.1");
+        let t = f();
+        std::env::remove_var("DD_ENV");
+        std::env::remove_var("DD_SERVICE");
+        std::env::remove_var("DD_VERSION");
+        t
     }
 }
 
