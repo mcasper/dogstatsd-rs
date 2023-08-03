@@ -4,6 +4,7 @@ pub fn format_for_send<M, I, S>(
     in_metric: &M,
     in_namespace: &str,
     tags: I,
+    sampling: f32,
     default_tags: &Vec<u8>,
 ) -> Vec<u8>
 where
@@ -25,6 +26,11 @@ where
     }
 
     buf.extend_from_slice(metric.as_bytes());
+
+    if sampling < 1.0 {
+        buf.extend_from_slice(b"|@");
+        buf.extend_from_slice(sampling.to_string().as_bytes());
+    }
 
     let mut tags_iter = tags.into_iter();
     let mut next_tag = tags_iter.next();
@@ -392,6 +398,7 @@ mod tests {
                 &CountMetric::Incr("foo", 20),
                 "namespace",
                 &[] as &[String],
+                1.0,
                 &String::default().into_bytes()
             )[..]
         )
@@ -405,6 +412,7 @@ mod tests {
                 &CountMetric::Incr("foo", 1),
                 "",
                 &["tag:1", "tag:2"],
+                1.0,
                 &String::default().into_bytes()
             )[..]
         )
@@ -418,6 +426,7 @@ mod tests {
                 &CountMetric::Incr("foo", 1),
                 "namespace",
                 &["tag:1", "tag:2"],
+                1.0,
                 &String::from("defaultag:3,seconddefault:4").into_bytes()
             )[..]
         )
@@ -431,6 +440,21 @@ mod tests {
                 &CountMetric::Incr("foo", 1),
                 "namespace",
                 &["tag:1", "tag:2"],
+                1.0,
+                &String::from("defaultag:3,seconddefault:4").into_bytes()
+            )[..]
+        )
+    }
+
+    #[test]
+    fn test_format_for_send_sampling() {
+        assert_eq!(
+            &b"namespace.foo:1|c|@0.33|#tag:1,tag:2,defaultag:3,seconddefault:4"[..],
+            &format_for_send(
+                &CountMetric::Incr("foo"),
+                "namespace",
+                &["tag:1", "tag:2"],
+                0.33,
                 &String::from("defaultag:3,seconddefault:4").into_bytes()
             )[..]
         )
@@ -444,6 +468,7 @@ mod tests {
                 &Event::new("title".into(), "text".into()),
                 "namespace",
                 &["tag:1", "tag:2"],
+                1.0,
                 &String::default().into_bytes()
             )[..]
         )
@@ -457,6 +482,7 @@ mod tests {
                 &CountMetric::Incr("foo", 1),
                 "namespace",
                 &[] as &[String],
+                1.0,
                 &String::from("defaultag:3,seconddefault:4").into_bytes()
             )[..]
         )
@@ -639,9 +665,10 @@ mod bench {
     #[bench]
     fn bench_format_for_send(b: &mut Bencher) {
         let metric = NullMetric;
+        let tags = String::default().into_bytes();
 
         b.iter(|| {
-            format_for_send(&metric, "foo", &["bar", "baz"]);
+            format_for_send(&metric, "foo", &["bar", "baz"], 1.0, &tags);
         })
     }
 
