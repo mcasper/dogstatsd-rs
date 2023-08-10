@@ -83,7 +83,7 @@ extern crate chrono;
 
 use std::future::Future;
 use std::net::UdpSocket;
-use std::sync::mpsc;
+use std::sync::{mpsc, Mutex};
 use std::thread;
 use std::{borrow::Cow, sync::mpsc::Sender};
 
@@ -315,7 +315,7 @@ impl OptionsBuilder {
 /// The client struct that handles sending metrics to the Dogstatsd server.
 #[derive(Debug)]
 pub struct Client {
-    tx: Sender<batch_processor::Message>,
+    tx: Mutex<Sender<batch_processor::Message>>,
     from_addr: String,
     to_addr: String,
     namespace: String,
@@ -358,7 +358,7 @@ impl Client {
         });
 
         Ok(Client {
-            tx,
+            tx: Mutex::from(tx),
             from_addr: options.from_addr,
             to_addr: options.to_addr,
             namespace: options.namespace,
@@ -742,7 +742,11 @@ impl Client {
     ///   client.shutdown();
     /// ```
     pub fn shutdown(&self) {
-        let _ = self.tx.send(batch_processor::Message::Shutdown);
+        let _ = self
+            .tx
+            .lock()
+            .unwrap()
+            .send(batch_processor::Message::Shutdown);
     }
 
     fn send<I, M, S>(&self, metric: &M, tags: I) -> DogstatsdResult
@@ -754,6 +758,8 @@ impl Client {
         let formatted_metric = format_for_send(metric, &self.namespace, tags, &self.default_tags);
         let _ = self
             .tx
+            .lock()
+            .unwrap()
             .send(batch_processor::Message::Data(formatted_metric));
 
         Ok(())
@@ -855,7 +861,7 @@ mod tests {
     fn test_new() {
         let client = Client::new(Options::default()).unwrap();
         let expected_client = Client {
-            tx: mpsc::channel().0,
+            tx: Mutex::from(mpsc::channel().0),
             from_addr: DEFAULT_FROM_ADDR.into(),
             to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
@@ -876,7 +882,7 @@ mod tests {
         );
         let client = Client::new(options).unwrap();
         let expected_client = Client {
-            tx: mpsc::channel().0,
+            tx: Mutex::from(mpsc::channel().0),
             from_addr: DEFAULT_FROM_ADDR.into(),
             to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
