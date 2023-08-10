@@ -322,6 +322,12 @@ pub struct Client {
     buffer: Vec<u8>,
 }
 
+impl Drop for Client {
+    fn drop(&mut self) {
+        let _ = self.flush();
+    }
+}
+
 impl PartialEq for Client {
     fn eq(&self, other: &Self) -> bool {
         // Ignore `socket` which will never be the same
@@ -734,10 +740,15 @@ impl Client {
         self.buffer.push(b'\n');
 
         if self.buffer.len() >= self.max_buffer_size {
-            self.socket.send_to(self.buffer.as_slice(), &self.to_addr)?;
-            self.buffer.clear();
+            self.flush()?;
         }
 
+        Ok(())
+    }
+
+    fn flush(&mut self) -> DogstatsdResult {
+        self.socket.send_to(self.buffer.as_slice(), &self.to_addr)?;
+        self.buffer.clear();
         Ok(())
     }
 }
