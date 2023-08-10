@@ -19,7 +19,7 @@
 //!
 //! // Binds to 127.0.0.1:9000 for transmitting and sends to 10.1.2.3:8125, with a
 //! // namespace of "analytics".
-//! let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics", vec!(String::new()));
+//! let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics", vec!(String::new()), 10000);
 //! let custom_client = Client::new(custom_options).unwrap();
 //!
 //! // You can also use the OptionsBuilder API to avoid needing to specify every option.
@@ -32,7 +32,7 @@
 //! ```
 //! use dogstatsd::{Client, Options, ServiceCheckOptions, ServiceStatus};
 //!
-//! let client = Client::new(Options::default()).unwrap();
+//! let mut client = Client::new(Options::default()).unwrap();
 //! let tags = &["env:production"];
 //!
 //! // Increment a counter
@@ -99,6 +99,7 @@ pub type DogstatsdResult = Result<(), DogstatsdError>;
 
 const DEFAULT_FROM_ADDR: &str = "0.0.0.0:0";
 const DEFAULT_TO_ADDR: &str = "127.0.0.1:8125";
+const DEFAULT_MAX_BUFFER_SIZE: usize = 60000;
 
 /// The struct that represents the options available for the Dogstatsd client.
 #[derive(Debug, PartialEq)]
@@ -111,6 +112,8 @@ pub struct Options {
     pub namespace: String,
     /// Default tags to include with every request.
     pub default_tags: Vec<String>,
+    /// The maximum buffer size of a batch of events.
+    pub max_buffer_size: usize,
 }
 
 impl Default for Options {
@@ -128,7 +131,8 @@ impl Default for Options {
     ///           from_addr: "0.0.0.0:0".into(),
     ///           to_addr: "127.0.0.1:8125".into(),
     ///           namespace: String::new(),
-    ///           default_tags: vec!()
+    ///           default_tags: vec!(),
+    ///           max_buffer_size: 60000,
     ///       },
     ///       options
     ///   )
@@ -139,6 +143,7 @@ impl Default for Options {
             to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
             default_tags: vec![],
+            max_buffer_size: DEFAULT_MAX_BUFFER_SIZE,
         }
     }
 }
@@ -151,14 +156,21 @@ impl Options {
     /// ```
     ///   use dogstatsd::Options;
     ///
-    ///   let options = Options::new("127.0.0.1:9000", "127.0.0.1:9001", "", vec!(String::new()));
+    ///   let options = Options::new("127.0.0.1:9000", "127.0.0.1:9001", "", vec!(String::new()), 60000);
     /// ```
-    pub fn new(from_addr: &str, to_addr: &str, namespace: &str, default_tags: Vec<String>) -> Self {
+    pub fn new(
+        from_addr: &str,
+        to_addr: &str,
+        namespace: &str,
+        default_tags: Vec<String>,
+        max_buffer_size: usize,
+    ) -> Self {
         Options {
             from_addr: from_addr.into(),
             to_addr: to_addr.into(),
             namespace: namespace.into(),
             default_tags,
+            max_buffer_size,
         }
     }
 }
@@ -174,6 +186,8 @@ pub struct OptionsBuilder {
     namespace: Option<String>,
     /// Default tags to include with every request.
     default_tags: Vec<String>,
+    /// The maximum buffer size of a batch of events.
+    max_buffer_size: Option<usize>,
 }
 
 impl OptionsBuilder {
@@ -246,6 +260,20 @@ impl OptionsBuilder {
         self
     }
 
+    /// Will allow the builder to generate an `Options` struct with the provided value. Is called to set the `max_buffer_size` field.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///   use dogstatsd::OptionsBuilder;
+    ///
+    ///   let options_builder = OptionsBuilder::new().max_buffer_size(10000);
+    /// ```
+    pub fn max_buffer_size(&mut self, max_buffer_size: usize) -> &mut OptionsBuilder {
+        self.max_buffer_size = Some(max_buffer_size);
+        self
+    }
+
     /// Will construct an `Options` with all of the provided values and fall back to the default values if they aren't provided.
     ///
     /// # Examples
@@ -261,7 +289,8 @@ impl OptionsBuilder {
     ///           from_addr: "0.0.0.0:0".into(),
     ///           to_addr: "127.0.0.1:8125".into(),
     ///           namespace: String::from("mynamespace"),
-    ///           default_tags: vec!(String::from("tag1:tav1val"))
+    ///           default_tags: vec!(String::from("tag1:tav1val")),
+    ///           max_buffer_size: 60000
     ///       },
     ///       options
     ///   )
@@ -276,6 +305,7 @@ impl OptionsBuilder {
                 .unwrap_or(&String::from(DEFAULT_TO_ADDR)),
             self.namespace.as_ref().unwrap_or(&String::default()),
             self.default_tags.to_vec(),
+            self.max_buffer_size.unwrap_or(DEFAULT_MAX_BUFFER_SIZE),
         )
     }
 }
@@ -288,15 +318,19 @@ pub struct Client {
     to_addr: String,
     namespace: String,
     default_tags: Vec<u8>,
+    max_buffer_size: usize,
+    buffer: Vec<u8>,
 }
 
 impl PartialEq for Client {
     fn eq(&self, other: &Self) -> bool {
-        // Ignore `socket`, which will never be the same
+        // Ignore `socket` which will never be the same
+        // Ignore `buffer` which does not need to match
         self.from_addr == other.from_addr
             && self.to_addr == other.to_addr
             && self.namespace == other.namespace
             && self.default_tags == other.default_tags
+            && self.max_buffer_size == other.max_buffer_size
     }
 }
 
@@ -317,6 +351,8 @@ impl Client {
             to_addr: options.to_addr,
             namespace: options.namespace,
             default_tags: options.default_tags.join(",").into_bytes(),
+            max_buffer_size: options.max_buffer_size,
+            buffer: vec![],
         })
     }
 
@@ -327,11 +363,11 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
+    ///   let mut client = Client::new(Options::default()).unwrap();
     ///   client.incr("counter", &["tag:counter"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn incr<'a, I, S, T>(&self, stat: S, tags: I) -> DogstatsdResult
+    pub fn incr<'a, I, S, T>(&mut self, stat: S, tags: I) -> DogstatsdResult
     where
         I: IntoIterator<Item = T>,
         S: Into<Cow<'a, str>>,
@@ -347,11 +383,11 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
+    ///   let mut client = Client::new(Options::default()).unwrap();
     ///   client.incr_by_value("counter", 123, &["tag:counter"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn incr_by_value<'a, I, S, T>(&self, stat: S, value: i64, tags: I) -> DogstatsdResult
+    pub fn incr_by_value<'a, I, S, T>(&mut self, stat: S, value: i64, tags: I) -> DogstatsdResult
     where
         I: IntoIterator<Item = T>,
         S: Into<Cow<'a, str>>,
@@ -367,11 +403,11 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
+    ///   let mut client = Client::new(Options::default()).unwrap();
     ///   client.decr("counter", &["tag:counter"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn decr<'a, I, S, T>(&self, stat: S, tags: I) -> DogstatsdResult
+    pub fn decr<'a, I, S, T>(&mut self, stat: S, tags: I) -> DogstatsdResult
     where
         I: IntoIterator<Item = T>,
         S: Into<Cow<'a, str>>,
@@ -387,11 +423,11 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
+    ///   let mut client = Client::new(Options::default()).unwrap();
     ///   client.decr_by_value("counter", 23, &["tag:counter"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn decr_by_value<'a, I, S, T>(&self, stat: S, value: i64, tags: I) -> DogstatsdResult
+    pub fn decr_by_value<'a, I, S, T>(&mut self, stat: S, value: i64, tags: I) -> DogstatsdResult
     where
         I: IntoIterator<Item = T>,
         S: Into<Cow<'a, str>>,
@@ -407,11 +443,11 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
+    ///   let mut client = Client::new(Options::default()).unwrap();
     ///   client.count("counter", 42, &["tag:counter"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn count<'a, I, S, T>(&self, stat: S, count: i64, tags: I) -> DogstatsdResult
+    pub fn count<'a, I, S, T>(&mut self, stat: S, count: i64, tags: I) -> DogstatsdResult
     where
         I: IntoIterator<Item = T>,
         S: Into<Cow<'a, str>>,
@@ -429,13 +465,13 @@ impl Client {
     ///   use std::thread;
     ///   use std::time::Duration;
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
+    ///   let mut client = Client::new(Options::default()).unwrap();
     ///   client.time("timer", &["tag:time"], || {
     ///       thread::sleep(Duration::from_millis(200))
     ///   }).unwrap_or_else(|(_, e)| println!("Encountered error: {}", e))
     /// ```
     pub fn time<'a, F, O, I, S, T>(
-        &self,
+        &mut self,
         stat: S,
         tags: I,
         block: F,
@@ -468,14 +504,14 @@ impl Client {
     ///
     /// # async fn do_work() {}
     ///   async fn timer() {
-    ///       let client = Client::new(Options::default()).unwrap();
+    ///       let mut client = Client::new(Options::default()).unwrap();
     ///       client.async_time("timer", &["tag:time"], do_work)
     ///       .await
     ///       .unwrap_or_else(|(_, e)| println!("Encountered error: {}", e))
     ///   }
     /// ```
     pub async fn async_time<'a, Fn, Fut, O, I, S, T>(
-        &self,
+        &mut self,
         stat: S,
         tags: I,
         block: Fn,
@@ -507,11 +543,11 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
+    ///   let mut client = Client::new(Options::default()).unwrap();
     ///   client.timing("timing", 350, &["tag:timing"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn timing<'a, I, S, T>(&self, stat: S, ms: i64, tags: I) -> DogstatsdResult
+    pub fn timing<'a, I, S, T>(&mut self, stat: S, ms: i64, tags: I) -> DogstatsdResult
     where
         I: IntoIterator<Item = T>,
         S: Into<Cow<'a, str>>,
@@ -527,11 +563,11 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
+    ///   let mut client = Client::new(Options::default()).unwrap();
     ///   client.gauge("gauge", "12345", &["tag:gauge"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn gauge<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
+    pub fn gauge<'a, I, S, SS, T>(&mut self, stat: S, val: SS, tags: I) -> DogstatsdResult
     where
         I: IntoIterator<Item = T>,
         S: Into<Cow<'a, str>>,
@@ -551,11 +587,11 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
+    ///   let mut client = Client::new(Options::default()).unwrap();
     ///   client.histogram("histogram", "67890", &["tag:histogram"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn histogram<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
+    pub fn histogram<'a, I, S, SS, T>(&mut self, stat: S, val: SS, tags: I) -> DogstatsdResult
     where
         I: IntoIterator<Item = T>,
         S: Into<Cow<'a, str>>,
@@ -575,11 +611,11 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
+    ///   let mut client = Client::new(Options::default()).unwrap();
     ///   client.distribution("distribution", "67890", &["tag:distribution"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn distribution<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
+    pub fn distribution<'a, I, S, SS, T>(&mut self, stat: S, val: SS, tags: I) -> DogstatsdResult
     where
         I: IntoIterator<Item = T>,
         S: Into<Cow<'a, str>>,
@@ -599,11 +635,11 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
+    ///   let mut client = Client::new(Options::default()).unwrap();
     ///   client.set("set", "13579", &["tag:set"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn set<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
+    pub fn set<'a, I, S, SS, T>(&mut self, stat: S, val: SS, tags: I) -> DogstatsdResult
     where
         I: IntoIterator<Item = T>,
         S: Into<Cow<'a, str>>,
@@ -623,7 +659,7 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options, ServiceStatus, ServiceCheckOptions};
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
+    ///   let mut client = Client::new(Options::default()).unwrap();
     ///   client.service_check("redis.can_connect", ServiceStatus::OK, &["tag:service"], None)
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     ///
@@ -643,7 +679,7 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn service_check<'a, I, S, T>(
-        &self,
+        &mut self,
         stat: S,
         val: ServiceStatus,
         tags: I,
@@ -668,11 +704,11 @@ impl Client {
     /// ```
     ///   use dogstatsd::{Client, Options};
     ///
-    ///   let client = Client::new(Options::default()).unwrap();
+    ///   let mut client = Client::new(Options::default()).unwrap();
     ///   client.event("Event Title", "Event Body", &["tag:event"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
-    pub fn event<'a, I, S, SS, T>(&self, title: S, text: SS, tags: I) -> DogstatsdResult
+    pub fn event<'a, I, S, SS, T>(&mut self, title: S, text: SS, tags: I) -> DogstatsdResult
     where
         I: IntoIterator<Item = T>,
         S: Into<Cow<'a, str>>,
@@ -685,16 +721,35 @@ impl Client {
         )
     }
 
-    fn send<I, M, S>(&self, metric: &M, tags: I) -> DogstatsdResult
+    fn send<I, M, S>(&mut self, metric: &M, tags: I) -> DogstatsdResult
     where
         I: IntoIterator<Item = S>,
         M: Metric,
         S: AsRef<str>,
     {
         let formatted_metric = format_for_send(metric, &self.namespace, tags, &self.default_tags);
-        self.socket
-            .send_to(formatted_metric.as_slice(), &self.to_addr)?;
+        for ch in formatted_metric {
+            self.buffer.push(ch)
+        }
+        self.buffer.push(b'\n');
+
+        if self.buffer.len() >= self.max_buffer_size {
+            self.flush()?;
+        }
+
         Ok(())
+    }
+
+    fn flush(&mut self) -> DogstatsdResult {
+        self.socket.send_to(self.buffer.as_slice(), &self.to_addr)?;
+        self.buffer.clear();
+        Ok(())
+    }
+}
+
+impl Drop for Client {
+    fn drop(&mut self) {
+        let _ = self.flush();
     }
 }
 
@@ -737,12 +792,14 @@ mod tests {
             .to_addr("127.0.0.2:8125".into())
             .namespace("mynamespace".into())
             .default_tag(String::from("tag1:tag1val"))
+            .max_buffer_size(10000)
             .build();
         let expected_options = Options {
             from_addr: "127.0.0.2:0".into(),
             to_addr: "127.0.0.2:8125".into(),
             namespace: "mynamespace".into(),
             default_tags: vec!["tag1:tag1val".into()].to_vec(),
+            max_buffer_size: 10000,
         };
 
         assert_eq!(expected_options, options);
@@ -757,6 +814,8 @@ mod tests {
             to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
             default_tags: String::new().into_bytes(),
+            max_buffer_size: 60000,
+            buffer: vec![],
         };
 
         assert_eq!(expected_client, client)
@@ -769,6 +828,7 @@ mod tests {
             DEFAULT_TO_ADDR,
             "",
             vec![String::from("tag1:tag1val")],
+            DEFAULT_MAX_BUFFER_SIZE,
         );
         let client = Client::new(options).unwrap();
         let expected_client = Client {
@@ -777,6 +837,8 @@ mod tests {
             to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
             default_tags: String::from("tag1:tag1val").into_bytes(),
+            max_buffer_size: DEFAULT_MAX_BUFFER_SIZE,
+            buffer: vec![],
         };
 
         assert_eq!(expected_client, client)
@@ -784,8 +846,8 @@ mod tests {
 
     #[test]
     fn test_send() {
-        let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "", vec![]);
-        let client = Client::new(options).unwrap();
+        let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "", vec![], 0);
+        let mut client = Client::new(options).unwrap();
         // Shouldn't panic or error
         client
             .send(
