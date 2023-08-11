@@ -353,6 +353,16 @@ pub struct Client {
     default_tags: Vec<u8>,
 }
 
+impl Drop for Client {
+    fn drop(&mut self) {
+        let _ = self
+            .tx
+            .lock()
+            .unwrap()
+            .send(batch_processor::Message::Shutdown);
+    }
+}
+
 impl PartialEq for Client {
     fn eq(&self, other: &Self) -> bool {
         // Ignore `tx` (sender) which will never be the same
@@ -761,24 +771,6 @@ impl Client {
             &Event::new(title.into().as_ref(), text.into().as_ref()),
             tags,
         )
-    }
-
-    /// Shutdown method to flush the final batch of events
-    ///
-    /// # Examples
-    ///
-    /// ```
-    ///   use dogstatsd::{Client, Options};
-    ///
-    ///   let client = Client::new(Options::default()).unwrap();
-    ///   client.shutdown();
-    /// ```
-    pub fn shutdown(&self) {
-        let _ = self
-            .tx
-            .lock()
-            .unwrap()
-            .send(batch_processor::Message::Shutdown);
     }
 
     fn send<I, M, S>(&self, metric: &M, tags: I) -> DogstatsdResult
