@@ -10,6 +10,7 @@
 //!
 //! ```
 //! use dogstatsd::{Client, Options, OptionsBuilder};
+//! use std::time::Duration;
 //!
 //! // Binds to a udp socket on an available ephemeral port on 127.0.0.1 for
 //! // transmitting, and sends to  127.0.0.1:8125, the default dogstatsd
@@ -19,7 +20,7 @@
 //!
 //! // Binds to 127.0.0.1:9000 for transmitting and sends to 10.1.2.3:8125, with a
 //! // namespace of "analytics".
-//! let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics", vec!(String::new()), 10000);
+//! let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics", vec!(String::new()), 10000, Duration::from_secs(30));
 //! let custom_client = Client::new(custom_options).unwrap();
 //!
 //! // You can also use the OptionsBuilder API to avoid needing to specify every option.
@@ -85,6 +86,7 @@ use std::future::Future;
 use std::net::UdpSocket;
 use std::sync::{mpsc, Mutex};
 use std::thread;
+use std::time::Duration;
 use std::{borrow::Cow, sync::mpsc::Sender};
 
 use chrono::Utc;
@@ -101,7 +103,8 @@ pub type DogstatsdResult = Result<(), DogstatsdError>;
 
 const DEFAULT_FROM_ADDR: &str = "0.0.0.0:0";
 const DEFAULT_TO_ADDR: &str = "127.0.0.1:8125";
-const DEFAULT_MAX_BUFFER_SIZE: usize = 60000;
+const DEFAULT_MAX_BUFFER_SIZE: usize = 0;
+const DEFAULT_MAX_TIME: Duration = Duration::from_secs(0);
 
 /// The struct that represents the options available for the Dogstatsd client.
 #[derive(Debug, PartialEq)]
@@ -114,8 +117,10 @@ pub struct Options {
     pub namespace: String,
     /// Default tags to include with every request.
     pub default_tags: Vec<String>,
-    /// The maximum buffer size of a batch of events.
+    /// The maximum buffer size in bytes of a batch of events.
     pub max_buffer_size: usize,
+    /// The maximum time before sending a batch of events.
+    pub max_time: Duration,
 }
 
 impl Default for Options {
@@ -125,6 +130,7 @@ impl Default for Options {
     ///
     /// ```
     ///   use dogstatsd::Options;
+    ///   use std::time::Duration;
     ///
     ///   let options = Options::default();
     ///
@@ -134,7 +140,8 @@ impl Default for Options {
     ///           to_addr: "127.0.0.1:8125".into(),
     ///           namespace: String::new(),
     ///           default_tags: vec!(),
-    ///           max_buffer_size: 60000,
+    ///           max_buffer_size: 0,
+    ///           max_time: Duration::from_secs(0),
     ///       },
     ///       options
     ///   )
@@ -146,6 +153,7 @@ impl Default for Options {
             namespace: String::new(),
             default_tags: vec![],
             max_buffer_size: DEFAULT_MAX_BUFFER_SIZE,
+            max_time: DEFAULT_MAX_TIME,
         }
     }
 }
@@ -157,8 +165,9 @@ impl Options {
     ///
     /// ```
     ///   use dogstatsd::Options;
+    ///   use std::time::Duration;
     ///
-    ///   let options = Options::new("127.0.0.1:9000", "127.0.0.1:9001", "", vec!(String::new()), 60000);
+    ///   let options = Options::new("127.0.0.1:9000", "127.0.0.1:9001", "", vec!(String::new()), 60000, Duration::from_secs(30));
     /// ```
     pub fn new(
         from_addr: &str,
@@ -166,6 +175,7 @@ impl Options {
         namespace: &str,
         default_tags: Vec<String>,
         max_buffer_size: usize,
+        max_time: Duration,
     ) -> Self {
         Options {
             from_addr: from_addr.into(),
@@ -173,6 +183,7 @@ impl Options {
             namespace: namespace.into(),
             default_tags,
             max_buffer_size,
+            max_time,
         }
     }
 }
@@ -188,8 +199,10 @@ pub struct OptionsBuilder {
     namespace: Option<String>,
     /// Default tags to include with every request.
     default_tags: Vec<String>,
-    /// The maximum buffer size of a batch of events.
+    /// The maximum buffer size in bytes of a batch of events.
     max_buffer_size: Option<usize>,
+    /// The maximum time before sending a batch of events.
+    max_time: Option<Duration>,
 }
 
 impl OptionsBuilder {
@@ -276,6 +289,21 @@ impl OptionsBuilder {
         self
     }
 
+    /// Will allow the builder to generate an `Options` struct with the provided value. Is called to set the `max_time` field.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///   use dogstatsd::OptionsBuilder;
+    ///   use std::time::Duration;
+    ///
+    ///   let options_builder = OptionsBuilder::new().max_time(Duration::from_secs(10));
+    /// ```
+    pub fn max_time(&mut self, max_time: Duration) -> &mut OptionsBuilder {
+        self.max_time = Some(max_time);
+        self
+    }
+
     /// Will construct an `Options` with all of the provided values and fall back to the default values if they aren't provided.
     ///
     /// # Examples
@@ -283,6 +311,7 @@ impl OptionsBuilder {
     /// ```
     ///   use dogstatsd::OptionsBuilder;
     ///   use dogstatsd::Options;
+    ///   use std::time::Duration;
     ///
     ///   let options = OptionsBuilder::new().namespace(String::from("mynamespace")).default_tag(String::from("tag1:tav1val")).build();
     ///
@@ -292,7 +321,8 @@ impl OptionsBuilder {
     ///           to_addr: "127.0.0.1:8125".into(),
     ///           namespace: String::from("mynamespace"),
     ///           default_tags: vec!(String::from("tag1:tav1val")),
-    ///           max_buffer_size: 60000
+    ///           max_buffer_size: 0,
+    ///           max_time: Duration::from_secs(0),
     ///       },
     ///       options
     ///   )
@@ -308,6 +338,7 @@ impl OptionsBuilder {
             self.namespace.as_ref().unwrap_or(&String::default()),
             self.default_tags.to_vec(),
             self.max_buffer_size.unwrap_or(DEFAULT_MAX_BUFFER_SIZE),
+            self.max_time.unwrap_or(DEFAULT_MAX_TIME),
         )
     }
 }
@@ -351,6 +382,7 @@ impl Client {
         thread::spawn(move || {
             batch_processor::process_events(
                 options.max_buffer_size,
+                options.max_time,
                 to_addr_for_spawn,
                 UdpSocket::bind(&from_addr_for_spawn).ok().unwrap(),
                 rx,
@@ -767,6 +799,7 @@ impl Client {
 }
 
 mod batch_processor {
+    use std::time::{Duration, SystemTime};
     use std::{net::UdpSocket, sync::mpsc::Receiver};
 
     pub(crate) enum Message {
@@ -776,10 +809,12 @@ mod batch_processor {
 
     pub(crate) fn process_events(
         max_buffer_size: usize,
+        max_time: Duration,
         to_addr: String,
         socket: UdpSocket,
         rx: Receiver<Message>,
     ) {
+        let mut last_updated = SystemTime::now();
         let mut buffer: Vec<u8> = vec![];
 
         loop {
@@ -790,9 +825,11 @@ mod batch_processor {
                     }
                     buffer.push(b'\n');
 
-                    if buffer.len() >= max_buffer_size {
+                    let current_time = SystemTime::now();
+                    if buffer.len() >= max_buffer_size || last_updated + max_time > current_time {
                         let _ = socket.send_to(buffer.as_slice(), &to_addr);
                         buffer.clear();
+                        last_updated = current_time;
                     }
                 }
                 Ok(Message::Shutdown) => {
@@ -808,6 +845,7 @@ mod batch_processor {
 #[cfg(test)]
 mod tests {
     use metrics::GaugeMetric;
+    use std::time::Duration;
 
     use super::*;
 
@@ -845,6 +883,7 @@ mod tests {
             .namespace("mynamespace".into())
             .default_tag(String::from("tag1:tag1val"))
             .max_buffer_size(10000)
+            .max_time(Duration::from_secs(30))
             .build();
         let expected_options = Options {
             from_addr: "127.0.0.2:0".into(),
@@ -852,6 +891,7 @@ mod tests {
             namespace: "mynamespace".into(),
             default_tags: vec!["tag1:tag1val".into()].to_vec(),
             max_buffer_size: 10000,
+            max_time: Duration::from_secs(30),
         };
 
         assert_eq!(expected_options, options);
@@ -879,6 +919,7 @@ mod tests {
             "",
             vec![String::from("tag1:tag1val")],
             DEFAULT_MAX_BUFFER_SIZE,
+            DEFAULT_MAX_TIME,
         );
         let client = Client::new(options).unwrap();
         let expected_client = Client {
@@ -894,7 +935,14 @@ mod tests {
 
     #[test]
     fn test_send() {
-        let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "", vec![], 0);
+        let options = Options::new(
+            "127.0.0.1:9001",
+            "127.0.0.1:9002",
+            "",
+            vec![],
+            0,
+            Duration::from_secs(0),
+        );
         let client = Client::new(options).unwrap();
         // Shouldn't panic or error
         client
