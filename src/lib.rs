@@ -84,6 +84,7 @@ extern crate chrono;
 use std::borrow::Cow;
 use std::future::Future;
 use std::net::UdpSocket;
+use std::os::unix::net::UnixDatagram;
 
 use chrono::Utc;
 
@@ -111,6 +112,8 @@ pub struct Options {
     pub namespace: String,
     /// Default tags to include with every request.
     pub default_tags: Vec<String>,
+    /// OPTIONAL, if defined, will use UDS instead of UDP and will ignore UDP options
+    pub socket_path: Option<String>,
 }
 
 impl Default for Options {
@@ -128,7 +131,8 @@ impl Default for Options {
     ///           from_addr: "0.0.0.0:0".into(),
     ///           to_addr: "127.0.0.1:8125".into(),
     ///           namespace: String::new(),
-    ///           default_tags: vec!()
+    ///           default_tags: vec!(),
+    ///           socket_path: None,
     ///       },
     ///       options
     ///   )
@@ -139,6 +143,7 @@ impl Default for Options {
             to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
             default_tags: vec![],
+            socket_path: None,
         }
     }
 }
@@ -151,14 +156,21 @@ impl Options {
     /// ```
     ///   use dogstatsd::Options;
     ///
-    ///   let options = Options::new("127.0.0.1:9000", "127.0.0.1:9001", "", vec!(String::new()));
+    ///   let options = Options::new("127.0.0.1:9000", "127.0.0.1:9001", "", vec!(String::new()), None);
     /// ```
-    pub fn new(from_addr: &str, to_addr: &str, namespace: &str, default_tags: Vec<String>) -> Self {
+    pub fn new(
+        from_addr: &str,
+        to_addr: &str,
+        namespace: &str,
+        default_tags: Vec<String>,
+        socket_path: Option<String>,
+    ) -> Self {
         Options {
             from_addr: from_addr.into(),
             to_addr: to_addr.into(),
             namespace: namespace.into(),
             default_tags,
+            socket_path,
         }
     }
 }
@@ -174,6 +186,8 @@ pub struct OptionsBuilder {
     namespace: Option<String>,
     /// Default tags to include with every request.
     default_tags: Vec<String>,
+    /// OPTIONAL, if defined, will use UDS instead of UDP and will ignore UDP options
+    socket_path: Option<String>,
 }
 
 impl OptionsBuilder {
@@ -246,6 +260,20 @@ impl OptionsBuilder {
         self
     }
 
+    /// Will allow the builder to generate an `Options` struct with the provided value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///   use dogstatsd::OptionsBuilder;
+    ///
+    ///   let options_builder = OptionsBuilder::new().default_tag(String::from("tag1:tav1val")).default_tag(String::from("tag2:tag2val"));
+    /// ```
+    pub fn socket_path(&mut self, socket_path: Option<String>) -> &mut OptionsBuilder {
+        self.socket_path = socket_path;
+        self
+    }
+
     /// Will construct an `Options` with all of the provided values and fall back to the default values if they aren't provided.
     ///
     /// # Examples
@@ -262,6 +290,7 @@ impl OptionsBuilder {
     ///           to_addr: "127.0.0.1:8125".into(),
     ///           namespace: String::from("mynamespace"),
     ///           default_tags: vec!(String::from("tag1:tav1val"))
+    ///           socket_path: None,
     ///       },
     ///       options
     ///   )
@@ -276,14 +305,21 @@ impl OptionsBuilder {
                 .unwrap_or(&String::from(DEFAULT_TO_ADDR)),
             self.namespace.as_ref().unwrap_or(&String::default()),
             self.default_tags.to_vec(),
+            self.socket_path.clone(),
         )
     }
+}
+
+#[derive(Debug)]
+enum SocketType {
+    Udp(UdpSocket),
+    Uds(UnixDatagram),
 }
 
 /// The client struct that handles sending metrics to the Dogstatsd server.
 #[derive(Debug)]
 pub struct Client {
-    socket: UdpSocket,
+    socket: SocketType,
     from_addr: String,
     to_addr: String,
     namespace: String,
@@ -312,7 +348,15 @@ impl Client {
     /// ```
     pub fn new(options: Options) -> Result<Self, DogstatsdError> {
         Ok(Client {
-            socket: UdpSocket::bind(&options.from_addr)?,
+            socket: match options.socket_path {
+                Some(socket_path) => {
+                    let uds_socket = UnixDatagram::unbound()?;
+                    uds_socket.set_nonblocking(true)?;
+                    uds_socket.connect(socket_path)?;
+                    SocketType::Uds(uds_socket)
+                }
+                None => SocketType::Udp(UdpSocket::bind(&options.from_addr)?),
+            },
             from_addr: options.from_addr,
             to_addr: options.to_addr,
             namespace: options.namespace,
@@ -692,8 +736,14 @@ impl Client {
         S: AsRef<str>,
     {
         let formatted_metric = format_for_send(metric, &self.namespace, tags, &self.default_tags);
-        self.socket
-            .send_to(formatted_metric.as_slice(), &self.to_addr)?;
+        match &self.socket {
+            SocketType::Udp(socket) => {
+                socket.send_to(formatted_metric.as_slice(), &self.to_addr)?;
+            }
+            SocketType::Uds(socket) => {
+                socket.send(formatted_metric.as_slice())?;
+            }
+        }
         Ok(())
     }
 }
@@ -743,6 +793,7 @@ mod tests {
             to_addr: "127.0.0.2:8125".into(),
             namespace: "mynamespace".into(),
             default_tags: vec!["tag1:tag1val".into()].to_vec(),
+            socket_path: None,
         };
 
         assert_eq!(expected_options, options);
@@ -752,7 +803,7 @@ mod tests {
     fn test_new() {
         let client = Client::new(Options::default()).unwrap();
         let expected_client = Client {
-            socket: UdpSocket::bind(DEFAULT_FROM_ADDR).unwrap(),
+            socket: SocketType::Udp(UdpSocket::bind(DEFAULT_FROM_ADDR).unwrap()),
             from_addr: DEFAULT_FROM_ADDR.into(),
             to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
@@ -769,10 +820,11 @@ mod tests {
             DEFAULT_TO_ADDR,
             "",
             vec![String::from("tag1:tag1val")],
+            None,
         );
         let client = Client::new(options).unwrap();
         let expected_client = Client {
-            socket: UdpSocket::bind(DEFAULT_FROM_ADDR).unwrap(),
+            socket: SocketType::Udp(UdpSocket::bind(DEFAULT_FROM_ADDR).unwrap()),
             from_addr: DEFAULT_FROM_ADDR.into(),
             to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
@@ -784,7 +836,7 @@ mod tests {
 
     #[test]
     fn test_send() {
-        let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "", vec![]);
+        let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "", vec![], None);
         let client = Client::new(options).unwrap();
         // Shouldn't panic or error
         client
