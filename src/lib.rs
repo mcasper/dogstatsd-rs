@@ -842,10 +842,13 @@ impl Client {
                 socket.send(formatted_metric.as_slice())?;
             }
             SocketType::BatchableUdp(tx_channel) | SocketType::BatchableUds(tx_channel) => {
-                let _ = tx_channel
+                tx_channel
                     .lock()
                     .expect("Mutex poisoned...")
-                    .send(batch_processor::Message::Data(formatted_metric));
+                    .send(batch_processor::Message::Data(formatted_metric))
+                    .unwrap_or_else(|error| {
+                        println!("Exception occurred when writing to channel: {:?}", error);
+                    });
             }
         }
         Ok(())
@@ -902,7 +905,10 @@ mod batch_processor {
                     fn_send_to_socket(&buffer);
                     buffer.clear();
                 }
-                Err(_) => break,
+                Err(e) => {
+                    println!("Exception occurred when reading from channel: {:?}", e);
+                    break;
+                },
             }
         }
     }
