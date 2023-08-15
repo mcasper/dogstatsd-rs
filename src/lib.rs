@@ -371,7 +371,7 @@ pub struct Client {
 
 impl PartialEq for Client {
     fn eq(&self, other: &Self) -> bool {
-        // Ignore `socket` and `buffering_tx_channel`, which will never be the same
+        // Ignore `socket`, which will never be the same
         self.from_addr == other.from_addr
             && self.to_addr == other.to_addr
             && self.namespace == other.namespace
