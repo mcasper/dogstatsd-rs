@@ -892,7 +892,7 @@ mod batch_processor {
                     buffer.push(b'\n');
 
                     let current_time = SystemTime::now();
-                    if buffer.len() >= max_buffer_size || last_updated + max_time > current_time {
+                    if buffer.len() >= max_buffer_size || last_updated + max_time < current_time {
                         fn_send_to_socket(&buffer);
                         buffer.clear();
                         last_updated = current_time;
