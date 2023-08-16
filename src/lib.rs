@@ -407,7 +407,8 @@ impl Client {
     pub fn new(options: Options) -> Result<Self, DogstatsdError> {
         let fn_create_tx_channel = |socket: SocketType,
                                     batching_options: BatchingOptions,
-                                    to_addr: String|
+                                    to_addr: String,
+                                    socket_path: Option<String>|
          -> Mutex<Sender<batch_processor::Message>> {
             let (tx, rx) = mpsc::channel();
             thread::spawn(move || {
@@ -416,6 +417,7 @@ impl Client {
                     batching_options.max_time,
                     to_addr,
                     socket,
+                    socket_path.expect("Only invoked if socket path is defined."),
                     rx,
                 );
             });
@@ -434,6 +436,7 @@ impl Client {
                         wrapped_socket,
                         batching_options,
                         options.to_addr.clone(),
+                        None,
                     ))
                 } else {
                     wrapped_socket
@@ -446,6 +449,7 @@ impl Client {
                         wrapped_socket,
                         batching_options,
                         options.to_addr.clone(),
+                        None,
                     ))
                 } else {
                     wrapped_socket
@@ -857,6 +861,7 @@ impl Client {
 
 mod batch_processor {
     use crate::SocketType;
+    use std::io::ErrorKind;
     use std::sync::mpsc::Receiver;
     use std::time::{Duration, SystemTime};
 
@@ -870,11 +875,12 @@ mod batch_processor {
         max_time: Duration,
         to_addr: String,
         socket: SocketType,
+        socket_path: String,
         rx: Receiver<Message>,
     ) {
         let mut last_updated = SystemTime::now();
         let mut buffer: Vec<u8> = vec![];
-        let fn_send_to_socket = |data: &Vec<u8>| match &socket {
+        let fn_send_to_socket = |data: &Vec<u8>, socket_path: &String| match &socket {
             SocketType::Udp(socket) => {
                 socket
                     .send_to(data.as_slice(), &to_addr)
@@ -884,6 +890,11 @@ mod batch_processor {
                             error,
                             data.len()
                         );
+
+                        if error.kind() == ErrorKind::NotConnected {
+                            println!("Attempting to reconnect to socket... {}", socket_path);
+                            let _ = socket.connect(socket_path);
+                        }
                         0
                     });
             }
@@ -912,13 +923,13 @@ mod batch_processor {
 
                     let current_time = SystemTime::now();
                     if buffer.len() >= max_buffer_size || last_updated + max_time < current_time {
-                        fn_send_to_socket(&buffer);
+                        fn_send_to_socket(&buffer, &socket_path);
                         buffer.clear();
                         last_updated = current_time;
                     }
                 }
                 Ok(Message::Shutdown) => {
-                    fn_send_to_socket(&buffer);
+                    fn_send_to_socket(&buffer, &socket_path);
                     buffer.clear();
                 }
                 Err(e) => {
