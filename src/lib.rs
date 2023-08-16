@@ -301,15 +301,16 @@ impl OptionsBuilder {
     /// # Examples
     ///
     /// ```
-    ///   use dogstatsd::OptionsBuilder;
+    ///   use dogstatsd::{ OptionsBuilder, BatchingOptions };
+    ///   use std::time::Duration;
     ///
-    ///   let options_builder = OptionsBuilder::new().batching_options(None);
+    ///   let options_builder = OptionsBuilder::new().batching_options(BatchingOptions { max_buffer_size: 8000, max_time: Duration::from_millis(3000) });
     /// ```
     pub fn batching_options(
         &mut self,
-        batching_options: Option<BatchingOptions>,
+        batching_options: BatchingOptions,
     ) -> &mut OptionsBuilder {
-        self.batching_options = batching_options;
+        self.batching_options = Some(batching_options);
         self
     }
 
