@@ -876,10 +876,26 @@ mod batch_processor {
         let mut buffer: Vec<u8> = vec![];
         let fn_send_to_socket = |data: &Vec<u8>| match &socket {
             SocketType::Udp(socket) => {
-                let _ = socket.send_to(data.as_slice(), &to_addr);
+                socket
+                    .send_to(data.as_slice(), &to_addr)
+                    .unwrap_or_else(|error| {
+                        println!(
+                            "Exception occurred when writing to socket: {:?} {}",
+                            error,
+                            data.len()
+                        );
+                        0
+                    });
             }
             SocketType::Uds(socket) => {
-                let _ = socket.send(data.as_slice());
+                socket.send(data.as_slice()).unwrap_or_else(|error| {
+                    println!(
+                        "Exception occurred when writing to socket: {:?} {}",
+                        error,
+                        data.len()
+                    );
+                    0
+                });
             }
             SocketType::BatchableUdp(_tx_channel) | SocketType::BatchableUds(_tx_channel) => {
                 panic!("Logic Error - socket type should not be batchable.");
@@ -908,7 +924,7 @@ mod batch_processor {
                 Err(e) => {
                     println!("Exception occurred when reading from channel: {:?}", e);
                     break;
-                },
+                }
             }
         }
     }
