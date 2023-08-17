@@ -113,6 +113,10 @@ pub struct BatchingOptions {
     pub max_buffer_size: usize,
     /// The maximum time before sending a batch of events.
     pub max_time: Duration,
+    /// The maximum retry attempts if we fail to flush our buffer
+    pub max_retry_attempts: usize,
+    /// Upon retry, there is an exponential backoff, this value sets the starting value
+    pub initial_retry_delay: u64,
 }
 
 /// The struct that represents the options available for the Dogstatsd client.
@@ -304,7 +308,7 @@ impl OptionsBuilder {
     ///   use dogstatsd::{ OptionsBuilder, BatchingOptions };
     ///   use std::time::Duration;
     ///
-    ///   let options_builder = OptionsBuilder::new().batching_options(BatchingOptions { max_buffer_size: 8000, max_time: Duration::from_millis(3000) });
+    ///   let options_builder = OptionsBuilder::new().batching_options(BatchingOptions { max_buffer_size: 8000, max_time: Duration::from_millis(3000), max_retry_attempts: 3, initial_retry_delay: 10 });
     /// ```
     pub fn batching_options(&mut self, batching_options: BatchingOptions) -> &mut OptionsBuilder {
         self.batching_options = Some(batching_options);
@@ -410,14 +414,7 @@ impl Client {
          -> Mutex<Sender<batch_processor::Message>> {
             let (tx, rx) = mpsc::channel();
             thread::spawn(move || {
-                batch_processor::process_events(
-                    batching_options.max_buffer_size,
-                    batching_options.max_time,
-                    to_addr,
-                    socket,
-                    socket_path,
-                    rx,
-                );
+                batch_processor::process_events(batching_options, to_addr, socket, socket_path, rx);
             });
             Mutex::from(tx)
         };
@@ -858,19 +855,81 @@ impl Client {
 }
 
 mod batch_processor {
-    use crate::SocketType;
-    use std::io::ErrorKind;
+    use crate::{BatchingOptions, SocketType};
+    use retry::{delay::jitter, delay::Exponential, retry};
     use std::sync::mpsc::Receiver;
-    use std::time::{Duration, SystemTime};
+    use std::time::SystemTime;
 
     pub(crate) enum Message {
         Data(Vec<u8>),
         Shutdown,
     }
 
+    fn send_to_socket_with_retries(
+        batching_options: &BatchingOptions,
+        socket: &SocketType,
+        data: &Vec<u8>,
+        to_addr: &String,
+        socket_path: &Option<String>,
+    ) {
+        retry(
+            Exponential::from_millis(batching_options.initial_retry_delay)
+                .map(jitter)
+                .take(batching_options.max_retry_attempts),
+            || {
+                match socket {
+                    SocketType::Udp(socket) => {
+                        if let Err(error) = socket.send_to(data.as_slice(), to_addr) {
+                            println!(
+                                "Exception occurred when writing to UDP socket: {:?} {}",
+                                error,
+                                data.len()
+                            );
+                            return Err(error);
+                        }
+                    }
+                    SocketType::Uds(socket) => {
+                        if let Err(error) = socket.send(data.as_slice()) {
+                            println!(
+                                "Exception occurred when writing to UDS socket: {:?} {}",
+                                error,
+                                data.len()
+                            );
+
+                            // Per https://doc.rust-lang.org/stable/std/os/unix/net/struct.UnixDatagram.html#method.send
+                            // If send fails, it is due to a connection issue, so just attempt
+                            // to reconnect
+                            let socket_path_unwrapped = socket_path
+                                .as_ref()
+                                .expect("Only invoked if socket path is defined.");
+                            println!(
+                                "Attempting to reconnect to socket... {}",
+                                socket_path_unwrapped
+                            );
+                            socket.connect(socket_path_unwrapped)?;
+
+                            return Err(error);
+                        }
+                    }
+                    SocketType::BatchableUdp(_tx_channel)
+                    | SocketType::BatchableUds(_tx_channel) => {
+                        panic!("Logic Error - socket type should not be batchable.");
+                    }
+                }
+
+                Ok(())
+            },
+        )
+        .unwrap_or_else(|error| {
+            println!(
+                "Failed to send within retry policy... Dropping metrics: {:?}",
+                error
+            )
+        });
+    }
+
     pub(crate) fn process_events(
-        max_buffer_size: usize,
-        max_time: Duration,
+        batching_options: BatchingOptions,
         to_addr: String,
         socket: SocketType,
         socket_path: Option<String>,
@@ -878,45 +937,6 @@ mod batch_processor {
     ) {
         let mut last_updated = SystemTime::now();
         let mut buffer: Vec<u8> = vec![];
-        let fn_send_to_socket = |data: &Vec<u8>, socket_path: &Option<String>| match &socket {
-            SocketType::Udp(socket) => {
-                socket
-                    .send_to(data.as_slice(), &to_addr)
-                    .unwrap_or_else(|error| {
-                        println!(
-                            "Exception occurred when writing to UDP socket: {:?} {}",
-                            error,
-                            data.len()
-                        );
-                        0
-                    });
-            }
-            SocketType::Uds(socket) => {
-                socket.send(data.as_slice()).unwrap_or_else(|error| {
-                    println!(
-                        "Exception occurred when writing to UDS socket: {:?} {}",
-                        error,
-                        data.len()
-                    );
-
-                    if error.kind() == ErrorKind::NotConnected {
-                        let socket_path_unwrapped = socket_path
-                            .as_ref()
-                            .expect("Only invoked if socket path is defined.");
-                        println!(
-                            "Attempting to reconnect to socket... {}",
-                            socket_path_unwrapped
-                        );
-                        let _ = socket.connect(socket_path_unwrapped);
-                    }
-
-                    0
-                });
-            }
-            SocketType::BatchableUdp(_tx_channel) | SocketType::BatchableUds(_tx_channel) => {
-                panic!("Logic Error - socket type should not be batchable.");
-            }
-        };
 
         loop {
             match rx.recv() {
@@ -927,14 +947,28 @@ mod batch_processor {
                     buffer.push(b'\n');
 
                     let current_time = SystemTime::now();
-                    if buffer.len() >= max_buffer_size || last_updated + max_time < current_time {
-                        fn_send_to_socket(&buffer, &socket_path);
+                    if buffer.len() >= batching_options.max_buffer_size
+                        || last_updated + batching_options.max_time < current_time
+                    {
+                        send_to_socket_with_retries(
+                            &batching_options,
+                            &socket,
+                            &buffer,
+                            &to_addr,
+                            &socket_path,
+                        );
                         buffer.clear();
                         last_updated = current_time;
                     }
                 }
                 Ok(Message::Shutdown) => {
-                    fn_send_to_socket(&buffer, &socket_path);
+                    send_to_socket_with_retries(
+                        &batching_options,
+                        &socket,
+                        &buffer,
+                        &to_addr,
+                        &socket_path,
+                    );
                     buffer.clear();
                 }
                 Err(e) => {
