@@ -891,11 +891,14 @@ mod batch_processor {
                             error,
                             data.len()
                         );
+                        
+                        // Per: https://doc.rust-lang.org/stable/std/os/unix/net/struct.UnixDatagram.html#method.send
+                        // The peer address may be set by the connect method, and this method will return an
+                        // error if the socket has not already been connected.
+                        //
+                        // So try to reconnect if it fails...
+                        let _ = socket.connect(socket_path);
 
-                        if error.kind() == ErrorKind::NotConnected {
-                            println!("Attempting to reconnect to socket... {}", socket_path);
-                            let _ = socket.connect(socket_path);
-                        }
                         0
                     });
             }
