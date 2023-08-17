@@ -862,6 +862,7 @@ impl Client {
 
 mod batch_processor {
     use crate::SocketType;
+    use std::io::ErrorKind;
     use std::sync::mpsc::Receiver;
     use std::time::{Duration, SystemTime};
 
@@ -886,28 +887,26 @@ mod batch_processor {
                     .send_to(data.as_slice(), &to_addr)
                     .unwrap_or_else(|error| {
                         println!(
-                            "Exception occurred when writing to socket: {:?} {}",
+                            "Exception occurred when writing to UDP socket: {:?} {}",
                             error,
                             data.len()
                         );
-                        
-                        // Per: https://doc.rust-lang.org/stable/std/os/unix/net/struct.UnixDatagram.html#method.send
-                        // The peer address may be set by the connect method, and this method will return an
-                        // error if the socket has not already been connected.
-                        //
-                        // So try to reconnect if it fails...
-                        let _ = socket.connect(socket_path);
-
                         0
                     });
             }
             SocketType::Uds(socket) => {
                 socket.send(data.as_slice()).unwrap_or_else(|error| {
                     println!(
-                        "Exception occurred when writing to socket: {:?} {}",
+                        "Exception occurred when writing to UDS socket: {:?} {}",
                         error,
                         data.len()
                     );
+
+                    if error.kind() == ErrorKind::NotConnected {
+                        println!("Attempting to reconnect to socket... {}", socket_path);
+                        let _ = socket.connect(socket_path);
+                    }
+
                     0
                 });
             }
