@@ -429,7 +429,7 @@ impl Client {
             Some(socket_path) => {
                 let uds_socket = UnixDatagram::unbound()?;
                 uds_socket.set_nonblocking(true)?;
-                uds_socket.connect(socket_path)?;
+                uds_socket.connect(socket_path.clone())?;
 
                 let wrapped_socket = SocketType::Uds(uds_socket);
                 if let Some(batching_options) = options.batching_options {
@@ -437,7 +437,7 @@ impl Client {
                         wrapped_socket,
                         batching_options,
                         options.to_addr.clone(),
-                        None,
+                        Some(socket_path),
                     ))
                 } else {
                     wrapped_socket
