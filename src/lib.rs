@@ -306,10 +306,7 @@ impl OptionsBuilder {
     ///
     ///   let options_builder = OptionsBuilder::new().batching_options(BatchingOptions { max_buffer_size: 8000, max_time: Duration::from_millis(3000) });
     /// ```
-    pub fn batching_options(
-        &mut self,
-        batching_options: BatchingOptions,
-    ) -> &mut OptionsBuilder {
+    pub fn batching_options(&mut self, batching_options: BatchingOptions) -> &mut OptionsBuilder {
         self.batching_options = Some(batching_options);
         self
     }
@@ -418,7 +415,7 @@ impl Client {
                     batching_options.max_time,
                     to_addr,
                     socket,
-                    socket_path.expect("Only invoked if socket path is defined."),
+                    socket_path,
                     rx,
                 );
             });
@@ -876,12 +873,12 @@ mod batch_processor {
         max_time: Duration,
         to_addr: String,
         socket: SocketType,
-        socket_path: String,
+        socket_path: Option<String>,
         rx: Receiver<Message>,
     ) {
         let mut last_updated = SystemTime::now();
         let mut buffer: Vec<u8> = vec![];
-        let fn_send_to_socket = |data: &Vec<u8>, socket_path: &String| match &socket {
+        let fn_send_to_socket = |data: &Vec<u8>, socket_path: &Option<String>| match &socket {
             SocketType::Udp(socket) => {
                 socket
                     .send_to(data.as_slice(), &to_addr)
@@ -903,8 +900,14 @@ mod batch_processor {
                     );
 
                     if error.kind() == ErrorKind::NotConnected {
-                        println!("Attempting to reconnect to socket... {}", socket_path);
-                        let _ = socket.connect(socket_path);
+                        let socket_path_unwrapped = socket_path
+                            .as_ref()
+                            .expect("Only invoked if socket path is defined.");
+                        println!(
+                            "Attempting to reconnect to socket... {}",
+                            socket_path_unwrapped
+                        );
+                        let _ = socket.connect(socket_path_unwrapped);
                     }
 
                     0
