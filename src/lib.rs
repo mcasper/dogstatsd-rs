@@ -862,7 +862,6 @@ impl Client {
 
 mod batch_processor {
     use crate::SocketType;
-    use std::io::ErrorKind;
     use std::sync::mpsc::Receiver;
     use std::time::{Duration, SystemTime};
 
