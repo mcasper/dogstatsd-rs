@@ -10,6 +10,7 @@
 //!
 //! ```
 //! use dogstatsd::{Client, Options, OptionsBuilder};
+//! use std::time::Duration;
 //!
 //! // Binds to a udp socket on an available ephemeral port on 127.0.0.1 for
 //! // transmitting, and sends to  127.0.0.1:8125, the default dogstatsd
@@ -19,7 +20,7 @@
 //!
 //! // Binds to 127.0.0.1:9000 for transmitting and sends to 10.1.2.3:8125, with a
 //! // namespace of "analytics".
-//! let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics", vec!(String::new()));
+//! let custom_options = Options::new("127.0.0.1:9000", "10.1.2.3:8125", "analytics", vec!(String::new()), None, None);
 //! let custom_client = Client::new(custom_options).unwrap();
 //!
 //! // You can also use the OptionsBuilder API to avoid needing to specify every option.
@@ -85,6 +86,10 @@ use std::borrow::Cow;
 use std::future::Future;
 use std::net::UdpSocket;
 use std::os::unix::net::UnixDatagram;
+use std::sync::mpsc::Sender;
+use std::sync::{mpsc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 use chrono::Utc;
 
@@ -102,6 +107,19 @@ const DEFAULT_FROM_ADDR: &str = "0.0.0.0:0";
 const DEFAULT_TO_ADDR: &str = "127.0.0.1:8125";
 
 /// The struct that represents the options available for the Dogstatsd client.
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct BatchingOptions {
+    /// The maximum buffer size in bytes of a batch of events.
+    pub max_buffer_size: usize,
+    /// The maximum time before sending a batch of events.
+    pub max_time: Duration,
+    /// The maximum retry attempts if we fail to flush our buffer
+    pub max_retry_attempts: usize,
+    /// Upon retry, there is an exponential backoff, this value sets the starting value
+    pub initial_retry_delay: u64,
+}
+
+/// The struct that represents the options available for the Dogstatsd client.
 #[derive(Debug, PartialEq)]
 pub struct Options {
     /// The address of the udp socket we'll bind to for sending.
@@ -114,6 +132,8 @@ pub struct Options {
     pub default_tags: Vec<String>,
     /// OPTIONAL, if defined, will use UDS instead of UDP and will ignore UDP options
     pub socket_path: Option<String>,
+    /// OPTIONAL, if defined, will utilize batching for sending metrics
+    pub batching_options: Option<BatchingOptions>,
 }
 
 impl Default for Options {
@@ -133,6 +153,7 @@ impl Default for Options {
     ///           namespace: String::new(),
     ///           default_tags: vec!(),
     ///           socket_path: None,
+    ///           batching_options: None,
     ///       },
     ///       options
     ///   )
@@ -144,6 +165,7 @@ impl Default for Options {
             namespace: String::new(),
             default_tags: vec![],
             socket_path: None,
+            batching_options: None,
         }
     }
 }
@@ -156,7 +178,7 @@ impl Options {
     /// ```
     ///   use dogstatsd::Options;
     ///
-    ///   let options = Options::new("127.0.0.1:9000", "127.0.0.1:9001", "", vec!(String::new()), None);
+    ///   let options = Options::new("127.0.0.1:9000", "127.0.0.1:9001", "", vec!(String::new()), None, None);
     /// ```
     pub fn new(
         from_addr: &str,
@@ -164,6 +186,7 @@ impl Options {
         namespace: &str,
         default_tags: Vec<String>,
         socket_path: Option<String>,
+        batching_options: Option<BatchingOptions>,
     ) -> Self {
         Options {
             from_addr: from_addr.into(),
@@ -171,6 +194,7 @@ impl Options {
             namespace: namespace.into(),
             default_tags,
             socket_path,
+            batching_options,
         }
     }
 }
@@ -188,6 +212,8 @@ pub struct OptionsBuilder {
     default_tags: Vec<String>,
     /// OPTIONAL, if defined, will use UDS instead of UDP and will ignore UDP options
     socket_path: Option<String>,
+    /// OPTIONAL, if defined, will utilize batching for sending metrics
+    batching_options: Option<BatchingOptions>,
 }
 
 impl OptionsBuilder {
@@ -274,6 +300,21 @@ impl OptionsBuilder {
         self
     }
 
+    /// Will allow the builder to generate an `Options` struct with the provided value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///   use dogstatsd::{ OptionsBuilder, BatchingOptions };
+    ///   use std::time::Duration;
+    ///
+    ///   let options_builder = OptionsBuilder::new().batching_options(BatchingOptions { max_buffer_size: 8000, max_time: Duration::from_millis(3000), max_retry_attempts: 3, initial_retry_delay: 10 });
+    /// ```
+    pub fn batching_options(&mut self, batching_options: BatchingOptions) -> &mut OptionsBuilder {
+        self.batching_options = Some(batching_options);
+        self
+    }
+
     /// Will construct an `Options` with all of the provided values and fall back to the default values if they aren't provided.
     ///
     /// # Examples
@@ -289,8 +330,9 @@ impl OptionsBuilder {
     ///           from_addr: "0.0.0.0:0".into(),
     ///           to_addr: "127.0.0.1:8125".into(),
     ///           namespace: String::from("mynamespace"),
-    ///           default_tags: vec!(String::from("tag1:tav1val"))
+    ///           default_tags: vec!(String::from("tag1:tav1val")),
     ///           socket_path: None,
+    ///           batching_options: None,
     ///       },
     ///       options
     ///   )
@@ -306,6 +348,7 @@ impl OptionsBuilder {
             self.namespace.as_ref().unwrap_or(&String::default()),
             self.default_tags.to_vec(),
             self.socket_path.clone(),
+            self.batching_options,
         )
     }
 }
@@ -314,6 +357,8 @@ impl OptionsBuilder {
 enum SocketType {
     Udp(UdpSocket),
     Uds(UnixDatagram),
+    BatchableUdp(Mutex<Sender<batch_processor::Message>>),
+    BatchableUds(Mutex<Sender<batch_processor::Message>>),
 }
 
 /// The client struct that handles sending metrics to the Dogstatsd server.
@@ -336,6 +381,21 @@ impl PartialEq for Client {
     }
 }
 
+impl Drop for Client {
+    fn drop(&mut self) {
+        match &self.socket {
+            SocketType::BatchableUdp(tx_channel) | SocketType::BatchableUds(tx_channel) => {
+                // Destructing Client... If fails, ignore and keep going...
+                let _ = tx_channel
+                    .lock()
+                    .unwrap()
+                    .send(batch_processor::Message::Shutdown);
+            }
+            _ => {}
+        }
+    }
+}
+
 impl Client {
     /// Create a new client from an options struct.
     ///
@@ -347,16 +407,53 @@ impl Client {
     ///   let client = Client::new(Options::default()).unwrap();
     /// ```
     pub fn new(options: Options) -> Result<Self, DogstatsdError> {
-        Ok(Client {
-            socket: match options.socket_path {
-                Some(socket_path) => {
-                    let uds_socket = UnixDatagram::unbound()?;
-                    uds_socket.set_nonblocking(true)?;
-                    uds_socket.connect(socket_path)?;
-                    SocketType::Uds(uds_socket)
+        let fn_create_tx_channel = |socket: SocketType,
+                                    batching_options: BatchingOptions,
+                                    to_addr: String,
+                                    socket_path: Option<String>|
+         -> Mutex<Sender<batch_processor::Message>> {
+            let (tx, rx) = mpsc::channel();
+            thread::spawn(move || {
+                batch_processor::process_events(batching_options, to_addr, socket, socket_path, rx);
+            });
+            Mutex::from(tx)
+        };
+
+        let socket = match options.socket_path {
+            Some(socket_path) => {
+                let uds_socket = UnixDatagram::unbound()?;
+                uds_socket.set_nonblocking(true)?;
+                uds_socket.connect(socket_path.clone())?;
+
+                let wrapped_socket = SocketType::Uds(uds_socket);
+                if let Some(batching_options) = options.batching_options {
+                    SocketType::BatchableUds(fn_create_tx_channel(
+                        wrapped_socket,
+                        batching_options,
+                        options.to_addr.clone(),
+                        Some(socket_path),
+                    ))
+                } else {
+                    wrapped_socket
                 }
-                None => SocketType::Udp(UdpSocket::bind(&options.from_addr)?),
-            },
+            }
+            None => {
+                let wrapped_socket = SocketType::Udp(UdpSocket::bind(&options.from_addr)?);
+                if let Some(batching_options) = options.batching_options {
+                    SocketType::BatchableUdp(fn_create_tx_channel(
+                        wrapped_socket,
+                        batching_options,
+                        options.to_addr.clone(),
+                        None,
+                    ))
+                } else {
+                    wrapped_socket
+                }
+            }
+        };
+
+        Ok(Client {
+            socket,
             from_addr: options.from_addr,
             to_addr: options.to_addr,
             namespace: options.namespace,
@@ -743,8 +840,143 @@ impl Client {
             SocketType::Uds(socket) => {
                 socket.send(formatted_metric.as_slice())?;
             }
+            SocketType::BatchableUdp(tx_channel) | SocketType::BatchableUds(tx_channel) => {
+                tx_channel
+                    .lock()
+                    .expect("Mutex poisoned...")
+                    .send(batch_processor::Message::Data(formatted_metric))
+                    .unwrap_or_else(|error| {
+                        println!("Exception occurred when writing to channel: {:?}", error);
+                    });
+            }
         }
         Ok(())
+    }
+}
+
+mod batch_processor {
+    use crate::{BatchingOptions, SocketType};
+    use retry::{delay::jitter, delay::Exponential, retry};
+    use std::sync::mpsc::Receiver;
+    use std::time::SystemTime;
+
+    pub(crate) enum Message {
+        Data(Vec<u8>),
+        Shutdown,
+    }
+
+    fn send_to_socket_with_retries(
+        batching_options: &BatchingOptions,
+        socket: &SocketType,
+        data: &Vec<u8>,
+        to_addr: &String,
+        socket_path: &Option<String>,
+    ) {
+        retry(
+            Exponential::from_millis(batching_options.initial_retry_delay)
+                .map(jitter)
+                .take(batching_options.max_retry_attempts),
+            || {
+                match socket {
+                    SocketType::Udp(socket) => {
+                        if let Err(error) = socket.send_to(data.as_slice(), to_addr) {
+                            println!(
+                                "Exception occurred when writing to UDP socket: {:?} {}",
+                                error,
+                                data.len()
+                            );
+                            return Err(error);
+                        }
+                    }
+                    SocketType::Uds(socket) => {
+                        if let Err(error) = socket.send(data.as_slice()) {
+                            println!(
+                                "Exception occurred when writing to UDS socket: {:?} {}",
+                                error,
+                                data.len()
+                            );
+
+                            // Per https://doc.rust-lang.org/stable/std/os/unix/net/struct.UnixDatagram.html#method.send
+                            // If send fails, it is due to a connection issue, so just attempt
+                            // to reconnect
+                            let socket_path_unwrapped = socket_path
+                                .as_ref()
+                                .expect("Only invoked if socket path is defined.");
+                            println!(
+                                "Attempting to reconnect to socket... {}",
+                                socket_path_unwrapped
+                            );
+                            socket.connect(socket_path_unwrapped)?;
+
+                            return Err(error);
+                        }
+                    }
+                    SocketType::BatchableUdp(_tx_channel)
+                    | SocketType::BatchableUds(_tx_channel) => {
+                        panic!("Logic Error - socket type should not be batchable.");
+                    }
+                }
+
+                Ok(())
+            },
+        )
+        .unwrap_or_else(|error| {
+            println!(
+                "Failed to send within retry policy... Dropping metrics: {:?}",
+                error
+            )
+        });
+    }
+
+    pub(crate) fn process_events(
+        batching_options: BatchingOptions,
+        to_addr: String,
+        socket: SocketType,
+        socket_path: Option<String>,
+        rx: Receiver<Message>,
+    ) {
+        let mut last_updated = SystemTime::now();
+        let mut buffer: Vec<u8> = vec![];
+
+        loop {
+            match rx.recv() {
+                Ok(Message::Data(data)) => {
+                    for ch in data {
+                        buffer.push(ch);
+                    }
+                    buffer.push(b'\n');
+
+                    let current_time = SystemTime::now();
+                    if buffer.len() >= batching_options.max_buffer_size
+                        || last_updated + batching_options.max_time < current_time
+                    {
+                        send_to_socket_with_retries(
+                            &batching_options,
+                            &socket,
+                            &buffer,
+                            &to_addr,
+                            &socket_path,
+                        );
+                        buffer.clear();
+                        last_updated = current_time;
+                    }
+                }
+                Ok(Message::Shutdown) => {
+                    send_to_socket_with_retries(
+                        &batching_options,
+                        &socket,
+                        &buffer,
+                        &to_addr,
+                        &socket_path,
+                    );
+                    buffer.clear();
+                }
+                Err(e) => {
+                    println!("Exception occurred when reading from channel: {:?}", e);
+                    break;
+                }
+            }
+        }
     }
 }
 
@@ -794,6 +1026,7 @@ mod tests {
             namespace: "mynamespace".into(),
             default_tags: vec!["tag1:tag1val".into()].to_vec(),
             socket_path: None,
+            batching_options: None,
         };
 
         assert_eq!(expected_options, options);
@@ -821,6 +1054,7 @@ mod tests {
             "",
             vec![String::from("tag1:tag1val")],
             None,
+            None,
         );
         let client = Client::new(options).unwrap();
         let expected_client = Client {
@@ -836,7 +1070,7 @@ mod tests {
 
     #[test]
     fn test_send() {
-        let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "", vec![], None);
+        let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "", vec![], None, None);
         let client = Client::new(options).unwrap();
         // Shouldn't panic or error
         client
