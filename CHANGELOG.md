@@ -8,6 +8,12 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0] - 2023-08-24
+
+### Added
+
+- Support for batching metrics - https://github.com/mcasper/dogstatsd-rs/pull/60
+
 ## [0.9.0] - 2023-07-27
 
 ### Added
