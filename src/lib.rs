@@ -421,9 +421,23 @@ impl Client {
 
         let socket = match options.socket_path {
             Some(socket_path) => {
-                let uds_socket = UnixDatagram::unbound()?;
+                // The follow scenarios can occur:
+                // - socket does not exist yet: We will call .bind(...) to create one
+                // - socket exists, but no listener: We will retry attempting to connect
+                //   however, if no listener subscribes to the socket within retries, we will
+                //   failt to initialize
+                // - socket exists, with a listener: Calling .connect(...) will work successfully
+                let mut uds_socket = UnixDatagram::unbound()?;
+                match uds_socket.connect(socket_path.clone()) {
+                    Ok(socket) => socket,
+                    Err(e) => {
+                        println!(
+                            "Couldn't connect to uds socket.. attempting to re-create by binding directly: {e:?}"
+                        );
+                        uds_socket = UnixDatagram::bind(socket_path.clone())?;
+                    }
+                };  
                 uds_socket.set_nonblocking(true)?;
-                uds_socket.connect(socket_path.clone())?;
 
                 let wrapped_socket = SocketType::Uds(uds_socket);
                 if let Some(batching_options) = options.batching_options {
