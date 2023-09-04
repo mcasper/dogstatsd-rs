@@ -641,7 +641,12 @@ mod bench {
         let metric = NullMetric;
 
         b.iter(|| {
-            format_for_send(&metric, "foo", &["bar", "baz"], &String::default().into_bytes());
+            format_for_send(
+                &metric,
+                "foo",
+                &["bar", "baz"],
+                &String::default().into_bytes(),
+            );
         })
     }
 

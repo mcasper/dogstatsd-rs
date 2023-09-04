@@ -75,10 +75,10 @@
 
 #![cfg_attr(feature = "unstable", feature(test))]
 #![deny(
-warnings,
-missing_debug_implementations,
-missing_copy_implementations,
-missing_docs
+    warnings,
+    missing_debug_implementations,
+    missing_copy_implementations,
+    missing_docs
 )]
 extern crate chrono;
 
@@ -86,8 +86,8 @@ use std::borrow::Cow;
 use std::future::Future;
 use std::net::UdpSocket;
 use std::os::unix::net::UnixDatagram;
-use std::sync::{mpsc, Mutex};
 use std::sync::mpsc::Sender;
+use std::sync::{mpsc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -201,17 +201,29 @@ impl Options {
     fn merge_with_system_tags(default_tags: Vec<String>) -> Vec<String> {
         let mut merged_tags = default_tags;
 
-        if merged_tags.iter().find(|tag| tag.starts_with("env:")).is_none() {
+        if merged_tags
+            .iter()
+            .find(|tag| tag.starts_with("env:"))
+            .is_none()
+        {
             if let Ok(env) = std::env::var("DD_ENV") {
                 merged_tags.push(format!("env:{}", env));
             }
         }
-        if merged_tags.iter().find(|tag| tag.starts_with("service:")).is_none() {
+        if merged_tags
+            .iter()
+            .find(|tag| tag.starts_with("service:"))
+            .is_none()
+        {
             if let Ok(service) = std::env::var("DD_SERVICE") {
                 merged_tags.push(format!("service:{}", service));
             }
         }
-        if merged_tags.iter().find(|tag| tag.starts_with("version:")).is_none() {
+        if merged_tags
+            .iter()
+            .find(|tag| tag.starts_with("version:"))
+            .is_none()
+        {
             if let Ok(version) = std::env::var("DD_VERSION") {
                 merged_tags.push(format!("version:{}", version));
             }
@@ -433,7 +445,7 @@ impl Client {
                                     batching_options: BatchingOptions,
                                     to_addr: String,
                                     socket_path: Option<String>|
-                                    -> Mutex<Sender<batch_processor::Message>> {
+         -> Mutex<Sender<batch_processor::Message>> {
             let (tx, rx) = mpsc::channel();
             thread::spawn(move || {
                 batch_processor::process_events(batching_options, to_addr, socket, socket_path, rx);
@@ -497,10 +509,10 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn incr<'a, I, S, T>(&self, stat: S, tags: I) -> DogstatsdResult
-        where
-            I: IntoIterator<Item=T>,
-            S: Into<Cow<'a, str>>,
-            T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         self.send(&CountMetric::Incr(stat.into().as_ref(), 1), tags)
     }
@@ -517,10 +529,10 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn incr_by_value<'a, I, S, T>(&self, stat: S, value: i64, tags: I) -> DogstatsdResult
-        where
-            I: IntoIterator<Item=T>,
-            S: Into<Cow<'a, str>>,
-            T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         self.send(&CountMetric::Incr(stat.into().as_ref(), value), tags)
     }
@@ -537,10 +549,10 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn decr<'a, I, S, T>(&self, stat: S, tags: I) -> DogstatsdResult
-        where
-            I: IntoIterator<Item=T>,
-            S: Into<Cow<'a, str>>,
-            T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         self.send(&CountMetric::Decr(stat.into().as_ref(), 1), tags)
     }
@@ -557,10 +569,10 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn decr_by_value<'a, I, S, T>(&self, stat: S, value: i64, tags: I) -> DogstatsdResult
-        where
-            I: IntoIterator<Item=T>,
-            S: Into<Cow<'a, str>>,
-            T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         self.send(&CountMetric::Decr(stat.into().as_ref(), value), tags)
     }
@@ -577,10 +589,10 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn count<'a, I, S, T>(&self, stat: S, count: i64, tags: I) -> DogstatsdResult
-        where
-            I: IntoIterator<Item=T>,
-            S: Into<Cow<'a, str>>,
-            T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         self.send(&CountMetric::Arbitrary(stat.into().as_ref(), count), tags)
     }
@@ -605,11 +617,11 @@ impl Client {
         tags: I,
         block: F,
     ) -> Result<O, (O, DogstatsdError)>
-        where
-            F: FnOnce() -> O,
-            I: IntoIterator<Item=T>,
-            S: Into<Cow<'a, str>>,
-            T: AsRef<str>,
+    where
+        F: FnOnce() -> O,
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         let start_time = Utc::now();
         let output = block();
@@ -645,12 +657,12 @@ impl Client {
         tags: I,
         block: Fn,
     ) -> Result<O, (O, DogstatsdError)>
-        where
-            Fn: FnOnce() -> Fut,
-            Fut: Future<Output=O>,
-            I: IntoIterator<Item=T>,
-            S: Into<Cow<'a, str>>,
-            T: AsRef<str>,
+    where
+        Fn: FnOnce() -> Fut,
+        Fut: Future<Output = O>,
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         let start_time = Utc::now();
         let output = block().await;
@@ -677,10 +689,10 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn timing<'a, I, S, T>(&self, stat: S, ms: i64, tags: I) -> DogstatsdResult
-        where
-            I: IntoIterator<Item=T>,
-            S: Into<Cow<'a, str>>,
-            T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         self.send(&TimingMetric::new(stat.into().as_ref(), ms), tags)
     }
@@ -697,11 +709,11 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn gauge<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
-        where
-            I: IntoIterator<Item=T>,
-            S: Into<Cow<'a, str>>,
-            SS: Into<Cow<'a, str>>,
-            T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        SS: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         self.send(
             &GaugeMetric::new(stat.into().as_ref(), val.into().as_ref()),
@@ -721,11 +733,11 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn histogram<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
-        where
-            I: IntoIterator<Item=T>,
-            S: Into<Cow<'a, str>>,
-            SS: Into<Cow<'a, str>>,
-            T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        SS: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         self.send(
             &HistogramMetric::new(stat.into().as_ref(), val.into().as_ref()),
@@ -745,11 +757,11 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn distribution<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
-        where
-            I: IntoIterator<Item=T>,
-            S: Into<Cow<'a, str>>,
-            SS: Into<Cow<'a, str>>,
-            T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        SS: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         self.send(
             &DistributionMetric::new(stat.into().as_ref(), val.into().as_ref()),
@@ -769,11 +781,11 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn set<'a, I, S, SS, T>(&self, stat: S, val: SS, tags: I) -> DogstatsdResult
-        where
-            I: IntoIterator<Item=T>,
-            S: Into<Cow<'a, str>>,
-            SS: Into<Cow<'a, str>>,
-            T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        SS: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         self.send(
             &SetMetric::new(stat.into().as_ref(), val.into().as_ref()),
@@ -814,10 +826,10 @@ impl Client {
         tags: I,
         options: Option<ServiceCheckOptions>,
     ) -> DogstatsdResult
-        where
-            I: IntoIterator<Item=T>,
-            S: Into<Cow<'a, str>>,
-            T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         let unwrapped_options = options.unwrap_or_default();
         self.send(
@@ -838,11 +850,11 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     /// ```
     pub fn event<'a, I, S, SS, T>(&self, title: S, text: SS, tags: I) -> DogstatsdResult
-        where
-            I: IntoIterator<Item=T>,
-            S: Into<Cow<'a, str>>,
-            SS: Into<Cow<'a, str>>,
-            T: AsRef<str>,
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        SS: Into<Cow<'a, str>>,
+        T: AsRef<str>,
     {
         self.send(
             &Event::new(title.into().as_ref(), text.into().as_ref()),
@@ -851,10 +863,10 @@ impl Client {
     }
 
     fn send<I, M, S>(&self, metric: &M, tags: I) -> DogstatsdResult
-        where
-            I: IntoIterator<Item=S>,
-            M: Metric,
-            S: AsRef<str>,
+    where
+        I: IntoIterator<Item = S>,
+        M: Metric,
+        S: AsRef<str>,
     {
         let formatted_metric = format_for_send(metric, &self.namespace, tags, &self.default_tags);
         match &self.socket {
@@ -882,7 +894,7 @@ mod batch_processor {
     use std::sync::mpsc::Receiver;
     use std::time::SystemTime;
 
-    use retry::{delay::Exponential, delay::jitter, retry};
+    use retry::{delay::jitter, delay::Exponential, retry};
 
     use crate::{BatchingOptions, SocketType};
 
@@ -946,12 +958,12 @@ mod batch_processor {
                 Ok(())
             },
         )
-            .unwrap_or_else(|error| {
-                println!(
-                    "Failed to send within retry policy... Dropping metrics: {:?}",
-                    error
-                )
-            });
+        .unwrap_or_else(|error| {
+            println!(
+                "Failed to send within retry policy... Dropping metrics: {:?}",
+                error
+            )
+        });
     }
 
     pub(crate) fn process_events(
@@ -1114,7 +1126,8 @@ mod tests {
             from_addr: DEFAULT_FROM_ADDR.into(),
             to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
-            default_tags: String::from("tag1:tag1val,version:0.0.2,env:production,service:service").into_bytes(),
+            default_tags: String::from("tag1:tag1val,version:0.0.2,env:production,service:service")
+                .into_bytes(),
         };
 
         assert_eq!(expected_client, client)
