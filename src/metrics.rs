@@ -657,7 +657,7 @@ mod bench {
 
     #[bench]
     fn bench_set_counter(b: &mut Bencher) {
-        let metric = CountMetric::Incr("foo");
+        let metric = CountMetric::Incr("foo", 1);
 
         b.iter(|| metric.metric_type_format())
     }
