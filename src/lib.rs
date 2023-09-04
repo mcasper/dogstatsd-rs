@@ -436,7 +436,7 @@ impl Client {
                         );
                         uds_socket = UnixDatagram::bind(socket_path.clone())?;
                     }
-                };  
+                };
                 uds_socket.set_nonblocking(true)?;
 
                 let wrapped_socket = SocketType::Uds(uds_socket);
