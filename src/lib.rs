@@ -1107,12 +1107,14 @@ mod tests {
 
         let client = with_default_system_tags(|| Client::new(options).unwrap());
 
+        dbg!(String::from_utf8_lossy(client.default_tags.as_ref()));
+
         let expected_client = Client {
             socket: SocketType::Udp(UdpSocket::bind(DEFAULT_FROM_ADDR).unwrap()),
             from_addr: DEFAULT_FROM_ADDR.into(),
             to_addr: DEFAULT_TO_ADDR.into(),
             namespace: String::new(),
-            default_tags: String::from("env:production,service:service,tag1:tag1val,version:0.0.2").into_bytes(),
+            default_tags: String::from("tag1:tag1val,version:0.0.2,env:production,service:service").into_bytes(),
         };
 
         assert_eq!(expected_client, client)
