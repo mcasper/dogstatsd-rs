@@ -197,6 +197,40 @@ impl Options {
             batching_options,
         }
     }
+
+    fn merge_with_system_tags(default_tags: Vec<String>) -> Vec<String> {
+        let mut merged_tags = default_tags;
+
+        if merged_tags
+            .iter()
+            .find(|tag| tag.starts_with("env:"))
+            .is_none()
+        {
+            if let Ok(env) = std::env::var("DD_ENV") {
+                merged_tags.push(format!("env:{}", env));
+            }
+        }
+        if merged_tags
+            .iter()
+            .find(|tag| tag.starts_with("service:"))
+            .is_none()
+        {
+            if let Ok(service) = std::env::var("DD_SERVICE") {
+                merged_tags.push(format!("service:{}", service));
+            }
+        }
+        if merged_tags
+            .iter()
+            .find(|tag| tag.starts_with("version:"))
+            .is_none()
+        {
+            if let Ok(version) = std::env::var("DD_VERSION") {
+                merged_tags.push(format!("version:{}", version));
+            }
+        }
+
+        merged_tags
+    }
 }
 
 /// Struct that allows build an `Options` for available for the Dogstatsd client.
@@ -293,7 +327,7 @@ impl OptionsBuilder {
     /// ```
     ///   use dogstatsd::OptionsBuilder;
     ///
-    ///   let options_builder = OptionsBuilder::new().default_tag(String::from("tag1:tav1val")).default_tag(String::from("tag2:tag2val"));
+    ///   let options_builder = OptionsBuilder::new().default_tag(String::from("tag1:tav1val")).default_tag(String::from("tag2:tav2val"));
     /// ```
     pub fn socket_path(&mut self, socket_path: Option<String>) -> &mut OptionsBuilder {
         self.socket_path = socket_path;
@@ -466,12 +500,14 @@ impl Client {
             }
         };
 
+        let default_tags = Options::merge_with_system_tags(options.default_tags);
+
         Ok(Client {
             socket,
             from_addr: options.from_addr,
             to_addr: options.to_addr,
             namespace: options.namespace,
-            default_tags: options.default_tags.join(",").into_bytes(),
+            default_tags: default_tags.join(",").into_bytes(),
         })
     }
 
@@ -869,10 +905,12 @@ impl Client {
 }
 
 mod batch_processor {
-    use crate::{BatchingOptions, SocketType};
-    use retry::{delay::jitter, delay::Exponential, retry};
     use std::sync::mpsc::Receiver;
     use std::time::SystemTime;
+
+    use retry::{delay::jitter, delay::Exponential, retry};
+
+    use crate::{BatchingOptions, SocketType};
 
     pub(crate) enum Message {
         Data(Vec<u8>),
@@ -1083,6 +1121,33 @@ mod tests {
     }
 
     #[test]
+    fn test_system_tags() {
+        let options = Options::new(
+            DEFAULT_FROM_ADDR,
+            DEFAULT_TO_ADDR,
+            "",
+            vec![String::from("tag1:tag1val"), String::from("version:0.0.2")],
+            None,
+            None,
+        );
+
+        let client = with_default_system_tags(|| Client::new(options).unwrap());
+
+        dbg!(String::from_utf8_lossy(client.default_tags.as_ref()));
+
+        let expected_client = Client {
+            socket: SocketType::Udp(UdpSocket::bind(DEFAULT_FROM_ADDR).unwrap()),
+            from_addr: DEFAULT_FROM_ADDR.into(),
+            to_addr: DEFAULT_TO_ADDR.into(),
+            namespace: String::new(),
+            default_tags: String::from("tag1:tag1val,version:0.0.2,env:production,service:service")
+                .into_bytes(),
+        };
+
+        assert_eq!(expected_client, client)
+    }
+
+    #[test]
     fn test_send() {
         let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "", vec![], None, None);
         let client = Client::new(options).unwrap();
@@ -1093,6 +1158,17 @@ mod tests {
                 &["tag1", "tag2"],
             )
             .unwrap();
+    }
+
+    fn with_default_system_tags<T, F: FnOnce() -> T>(f: F) -> T {
+        std::env::set_var("DD_ENV", "production");
+        std::env::set_var("DD_SERVICE", "service");
+        std::env::set_var("DD_VERSION", "0.0.1");
+        let t = f();
+        std::env::remove_var("DD_ENV");
+        std::env::remove_var("DD_SERVICE");
+        std::env::remove_var("DD_VERSION");
+        t
     }
 }
 

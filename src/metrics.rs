@@ -641,7 +641,12 @@ mod bench {
         let metric = NullMetric;
 
         b.iter(|| {
-            format_for_send(&metric, "foo", &["bar", "baz"]);
+            format_for_send(
+                &metric,
+                "foo",
+                &["bar", "baz"],
+                &String::default().into_bytes(),
+            );
         })
     }
 
@@ -657,7 +662,7 @@ mod bench {
 
     #[bench]
     fn bench_set_counter(b: &mut Bencher) {
-        let metric = CountMetric::Incr("foo");
+        let metric = CountMetric::Incr("foo", 1);
 
         b.iter(|| metric.metric_type_format())
     }
