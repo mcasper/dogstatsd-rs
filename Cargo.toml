@@ -13,5 +13,8 @@ keywords = ["datadog", "dogstatsd", "client"]
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 retry = "2.0.0"
 
+[dev-dependencies]
+tokio = { version = "1.32", features = ["full"] }
+
 [features]
 unstable = []
