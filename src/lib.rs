@@ -904,6 +904,67 @@ impl Client {
     }
 }
 
+impl std::convert::TryFrom<UdpSocket> for Client {
+    type Error = std::io::Error;
+    fn try_from(socket: UdpSocket) -> std::io::Result<Self> {
+        let from_addr = socket.local_addr().map_or_else(|_| DEFAULT_FROM_ADDR.to_string(), |x| x.to_string());
+        let to_addr = socket.peer_addr().map_or_else(|_| DEFAULT_TO_ADDR.to_string(), |x| x.to_string());
+        Ok(Client {
+            socket: SocketType::Udp(socket),
+            from_addr,
+            to_addr,
+            namespace: String::new(),
+            default_tags: vec![],
+        })
+    }
+}
+
+/// Error type for `Client::try_into`
+#[derive(Debug)]
+pub enum TryIntoError {
+    /// Underlying client socket is not UDP
+    NotUdp,
+    /// Underlying client socket is not UNIX socket
+    NotUds,
+    /// Underlying client socket batched (can't extact it)
+    Batched,
+    /// IO error during try_into
+    Io(String, std::io::Error),
+}
+
+impl std::error::Error for TryIntoError {}
+
+impl std::fmt::Display for TryIntoError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            TryIntoError::NotUdp => write!(f, "Failed to convert into UDP socket. Underlying socket is not UDP"),
+            TryIntoError::NotUds => write!(f, "Failed to convert into Unix domain socket. Underlying socket is not Unix domain socket"),
+            TryIntoError::Batched => write!(f, "Failed to convert into socket. Underlying socket is batched"),
+            TryIntoError::Io(msg, err) => write!(f, "IO error, {msg}: {err}"),
+
+        }
+    }
+}
+
+impl From<std::io::Error> for TryIntoError {
+    fn from (err: std::io::Error) -> Self {
+        TryIntoError::Io("Fail to clone the fd".to_string(), err)
+    }
+}
+
+impl std::convert::TryInto<UdpSocket> for Client {
+    type Error = TryIntoError;
+    fn try_into(self) -> Result<UdpSocket, TryIntoError> {
+        match &self.socket {
+            SocketType::Udp(socket) => Ok(socket.try_clone()?),
+            SocketType::BatchableUdp(_) => Err(TryIntoError::Batched),
+            SocketType::Uds(_) => Err(TryIntoError::NotUdp),
+            SocketType::BatchableUds(_) => Err(TryIntoError::Batched),
+        }
+    }
+}
+
+
 mod batch_processor {
     use std::sync::mpsc::Receiver;
     use std::time::SystemTime;
@@ -1170,6 +1231,23 @@ mod tests {
         std::env::remove_var("DD_VERSION");
         t
     }
+
+    #[test]
+    fn test_socket() {
+        //Socket to consume incoming messages
+        let _rcv_socket = UdpSocket::bind("127.0.0.1:9002");
+        let options = Options::new("127.0.0.1:0", "127.0.0.1:9002", "", vec![], None, None);
+        let client = Client::new(options).unwrap();
+        let udp_socket: UdpSocket = client.try_into().expect("underlying UDP socket");
+        let client2: Client = udp_socket.try_into().expect("a new client is created");
+        client2
+            .send(
+                &GaugeMetric::new("gauge".into(), "1234".into()),
+                &["tag1", "tag2"],
+            )
+            .unwrap();
+    }
+
 }
 
 #[cfg(all(feature = "unstable", test))]
