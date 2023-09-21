@@ -72,6 +72,17 @@ client.service_check("redis.can_connect", ServiceStatus::OK, tags, Some(service_
 client.event("My Custom Event Title", "My Custom Event Body", tags).unwrap();
 ```
 
+## Async
+
+To use the `tokio` client for asynchronous emission, enable the `tokio` feature of this library. Usage should look almost identical to the synchronous interface.
+
+```rust
+let options = Options::new("127.0.0.1:9001", "127.0.0.1:9002", "");
+let client = Client::new(options).await.unwrap();
+// Shouldn't panic or error
+client.send(&GaugeMetric::new("gauge".into(), "1234".into()), &["tag1", "tag2"]).await.unwrap();
+```
+
 ## Benchmarks
 
 Support is provided for running benchmarks of all client commands. Until the

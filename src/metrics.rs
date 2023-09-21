@@ -444,8 +444,9 @@ mod tests {
 
     #[test]
     fn test_time_metric() {
-        let start_time = Utc.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 0);
-        let end_time = Utc.ymd(2016, 4, 24).and_hms_milli(0, 0, 0, 900);
+        let start_time = Utc.with_ymd_and_hms(2016, 4, 24, 0, 0, 0).single().unwrap();
+        let end_time = Utc.with_ymd_and_hms(2016, 4, 24, 0, 0, 900).single().unwrap();
+
         let metric = TimeMetric::new("time".into(), &start_time, &end_time);
 
         assert_eq!("time:900|ms", metric.metric_type_format())

@@ -1,6 +1,6 @@
 pub mod common;
 pub mod sync;
-#[cfg(feature = "async")]
+#[cfg(feature = "tokio")]
 pub mod tokio;
 
 pub use self::common::*;

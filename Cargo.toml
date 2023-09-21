@@ -15,4 +15,4 @@ tokio = { version = "1.10", features = ["net", "rt", "macros"], optional = true 
 
 [features]
 unstable = []
-async = ["tokio"]
+tokio = ["dep:tokio"]
