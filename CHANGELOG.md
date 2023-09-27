@@ -8,6 +8,16 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.0] - 2023-09-27
+
+### Added
+
+- Support standard system tags from DD_* environment variables - https://github.com/mcasper/dogstatsd-rs/pull/61
+
+### Changed
+
+- Improved UDS support - https://github.com/mcasper/dogstatsd-rs/pull/62
+
 ## [0.10.0] - 2023-08-24
 
 ### Added
