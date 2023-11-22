@@ -8,6 +8,12 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.1] - 2023-11-22
+
+### Changed
+
+Don't require static strings for ServiceCheckOptions - https://github.com/mcasper/dogstatsd-rs/pull/65
+
 ## [0.11.0] - 2023-09-27
 
 ### Added
