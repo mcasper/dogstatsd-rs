@@ -269,16 +269,16 @@ impl ServiceStatus {
 
 /// Struct for adding optional pieces to a service check
 #[derive(Default, Clone, Copy, Debug)]
-pub struct ServiceCheckOptions {
+pub struct ServiceCheckOptions<'a> {
     /// An optional timestamp to include with the check
     pub timestamp: Option<i32>,
     /// An optional hostname to include with the check
-    pub hostname: Option<&'static str>,
+    pub hostname: Option<&'a str>,
     /// An optional message to include with the check
-    pub message: Option<&'static str>,
+    pub message: Option<&'a str>,
 }
 
-impl ServiceCheckOptions {
+impl<'a> ServiceCheckOptions<'a> {
     fn len(&self) -> usize {
         let mut length = 0;
         length += self.timestamp.map_or(0, |ts| format!("{}", ts).len() + 3);
@@ -291,7 +291,7 @@ impl ServiceCheckOptions {
 pub struct ServiceCheck<'a> {
     stat: &'a str,
     val: ServiceStatus,
-    options: ServiceCheckOptions,
+    options: ServiceCheckOptions<'a>,
 }
 
 impl<'a> Metric for ServiceCheck<'a> {
@@ -327,7 +327,7 @@ impl<'a> Metric for ServiceCheck<'a> {
 }
 
 impl<'a> ServiceCheck<'a> {
-    pub fn new(stat: &'a str, val: ServiceStatus, options: ServiceCheckOptions) -> Self {
+    pub fn new(stat: &'a str, val: ServiceStatus, options: ServiceCheckOptions<'a>) -> Self {
         ServiceCheck { stat, val, options }
     }
 }
