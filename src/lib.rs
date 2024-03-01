@@ -894,32 +894,17 @@ mod batch_processor {
                 match socket {
                     SocketType::Udp(socket) => {
                         if let Err(error) = socket.send_to(data.as_slice(), to_addr) {
-                            println!(
-                                "Exception occurred when writing to UDP socket: {:?} {}",
-                                error,
-                                data.len()
-                            );
                             return Err(error);
                         }
                     }
                     SocketType::Uds(socket) => {
                         if let Err(error) = socket.send(data.as_slice()) {
-                            println!(
-                                "Exception occurred when writing to UDS socket: {:?} {}",
-                                error,
-                                data.len()
-                            );
-
                             // Per https://doc.rust-lang.org/stable/std/os/unix/net/struct.UnixDatagram.html#method.send
                             // If send fails, it is due to a connection issue, so just attempt
                             // to reconnect
                             let socket_path_unwrapped = socket_path
                                 .as_ref()
                                 .expect("Only invoked if socket path is defined.");
-                            println!(
-                                "Attempting to reconnect to socket... {}",
-                                socket_path_unwrapped
-                            );
                             socket.connect(socket_path_unwrapped)?;
 
                             return Err(error);
