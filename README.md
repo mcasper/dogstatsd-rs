@@ -1,5 +1,5 @@
-dogstatsd-rs
-============
+# dogstatsd-rs
+
 [![Build Status](https://travis-ci.org/mcasper/dogstatsd-rs.svg?branch=master)](https://travis-ci.org/mcasper/dogstatsd-rs)
 [![Crate Version](https://img.shields.io/crates/v/dogstatsd.svg)](https://crates.io/crates/dogstatsd)
 
@@ -14,6 +14,7 @@ you want, tag it, and enjoy your custom metrics.
 ## Usage
 
 Build an options struct and create a client:
+
 ```rust
 use dogstatsd::{Client, Options};
 
@@ -33,6 +34,7 @@ let built_client = Client::new(built_options).unwrap();
 ```
 
 Start sending metrics:
+
 ```rust
 use dogstatsd::{Client, Options, ServiceCheckOptions, ServiceStatus};
 
@@ -74,6 +76,14 @@ client.service_check("redis.can_connect", ServiceStatus::OK, tags, Some(service_
 
 // Send a custom event
 client.event("My Custom Event Title", "My Custom Event Body", tags).unwrap();
+
+// Send a custom event with options - https://docs.datadoghq.com/developers/dogstatsd/datagram_shell/?tab=events
+let event_options = EventOptions::new()
+    .with_timestamp(1638480000)
+    .with_hostname("localhost")
+    .with_priority("normal")
+    .with_alert_type("error");
+client.event_with_options("My Custom Event Title", "My Custom Event Body", tags, Some(event_options)).unwrap();
 ```
 
 ## Benchmarks
