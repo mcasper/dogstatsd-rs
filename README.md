@@ -36,7 +36,7 @@ let built_client = Client::new(built_options).unwrap();
 Start sending metrics:
 
 ```rust
-use dogstatsd::{Client, Options, ServiceCheckOptions, ServiceStatus};
+use dogstatsd::{Client, Options, ServiceCheckOptions, ServiceStatus, EventOptions, EventPriority, EventAlertType};
 
 let client = Client::new(Options::default()).unwrap();
 let tags = &["env:production"];
@@ -81,8 +81,8 @@ client.event("My Custom Event Title", "My Custom Event Body", tags).unwrap();
 let event_options = EventOptions::new()
     .with_timestamp(1638480000)
     .with_hostname("localhost")
-    .with_priority("normal")
-    .with_alert_type("error");
+    .with_priority(EventPriority::Normal)
+    .with_alert_type(EventAlertType::Error);
 client.event_with_options("My Custom Event Title", "My Custom Event Body", tags, Some(event_options)).unwrap();
 ```
 
