@@ -332,9 +332,61 @@ impl<'a> ServiceCheck<'a> {
     }
 }
 
+/// Represents priority levels for an event.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum EventPriority {
+    ///low
+    Low,
+    ///normal
+    Normal,
+}
+
+impl EventPriority {
+    /// convert to string
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EventPriority::Low => "low",
+            EventPriority::Normal => "normal",
+        }
+    }
+}
+
+/// Represents alert types for an event.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum EventAlertType {
+    /// info
+    Info,
+    /// warning
+    Warning,
+    /// error
+    Error,
+    ///success
+    Success,
+}
+
+//
+impl EventAlertType {
+    /// convert to string
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EventAlertType::Info => "info",
+            EventAlertType::Warning => "warning",
+            EventAlertType::Error => "error",
+            EventAlertType::Success => "success",
+        }
+    }
+}
+
+// https://docs.datadoghq.com/developers/dogstatsd/datagram_shell/?tab=events
 pub struct Event<'a> {
     title: &'a str,
     text: &'a str,
+    timestamp: Option<u64>,
+    hostname: Option<&'a str>,
+    aggregation_key: Option<&'a str>,
+    priority: Option<EventPriority>,
+    source_type_name: Option<&'a str>,
+    alert_type: Option<EventAlertType>,
 }
 
 impl<'a> Metric for Event<'a> {
@@ -356,13 +408,79 @@ impl<'a> Metric for Event<'a> {
         buf.push_str(self.title);
         buf.push('|');
         buf.push_str(self.text);
+
+        // Add optional fields if they are present
+        if let Some(timestamp) = self.timestamp {
+            buf.push_str("|d:");
+            buf.push_str(&timestamp.to_string());
+        }
+        if let Some(hostname) = self.hostname {
+            buf.push_str("|h:");
+            buf.push_str(hostname);
+        }
+        if let Some(aggregation_key) = self.aggregation_key {
+            buf.push_str("|k:");
+            buf.push_str(aggregation_key);
+        }
+        if let Some(priority) = self.priority {
+            buf.push_str("|p:");
+            buf.push_str(priority.as_str());
+        }
+        if let Some(source_type_name) = self.source_type_name {
+            buf.push_str("|s:");
+            buf.push_str(source_type_name);
+        }
+        if let Some(alert_type) = self.alert_type {
+            buf.push_str("|t:");
+            buf.push_str(alert_type.as_str());
+        }
+
         buf
     }
 }
 
 impl<'a> Event<'a> {
     pub fn new(title: &'a str, text: &'a str) -> Self {
-        Event { title, text }
+        Event {
+            title,
+            text,
+            timestamp: None,
+            hostname: None,
+            aggregation_key: None,
+            priority: None,
+            source_type_name: None,
+            alert_type: None,
+        }
+    }
+
+    pub fn with_timestamp(mut self, timestamp: u64) -> Self {
+        self.timestamp = Some(timestamp);
+        self
+    }
+
+    pub fn with_hostname(mut self, hostname: &'a str) -> Self {
+        self.hostname = Some(hostname);
+        self
+    }
+
+    pub fn with_aggregation_key(mut self, aggregation_key: &'a str) -> Self {
+        self.aggregation_key = Some(aggregation_key);
+        self
+    }
+
+    pub fn with_priority(mut self, priority: EventPriority) -> Self {
+        self.priority = Some(priority);
+        self
+    }
+
+    pub fn with_source_type_name(mut self, source_type_name: &'a str) -> Self {
+        self.source_type_name = Some(source_type_name);
+        self
+    }
+
+    pub fn with_alert_type(mut self, alert_type: EventAlertType) -> Self {
+        self.alert_type = Some(alert_type);
+        self
     }
 }
 
@@ -616,6 +734,25 @@ mod tests {
 
         assert_eq!(
             "_e{11,31}:Event Title|Event Body - Something Happened",
+            metric.metric_type_format()
+        )
+    }
+
+    #[test]
+    fn test_event_with_options() {
+        let metric = Event::new(
+            "Event Title".into(),
+            "Event Body - Something Happened".into(),
+        )
+        .with_timestamp(1638480000)
+        .with_hostname("localhost")
+        .with_aggregation_key("service_down")
+        .with_priority(EventPriority::Normal)
+        .with_source_type_name("monitoring")
+        .with_alert_type(EventAlertType::Error);
+
+        assert_eq!(
+            "_e{11,31}:Event Title|Event Body - Something Happened|d:1638480000|h:localhost|k:service_down|p:normal|s:monitoring|t:error",
             metric.metric_type_format()
         )
     }

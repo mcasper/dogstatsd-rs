@@ -71,6 +71,14 @@
 //!
 //! // Send a custom event
 //! client.event("My Custom Event Title", "My Custom Event Body", tags).unwrap();
+//!
+//! use dogstatsd::{EventOptions, EventPriority, EventAlertType};
+//! let event_options = EventOptions::new()
+//!     .with_timestamp(1638480000)
+//!     .with_hostname("localhost")
+//!     .with_priority(EventPriority::Normal)
+//!     .with_alert_type(EventAlertType::Error);
+//! client.event_with_options("My Custom Event Title", "My Custom Event Body", tags, Some(event_options)).unwrap();
 //! ```
 
 #![cfg_attr(feature = "unstable", feature(test))]
@@ -82,6 +90,7 @@
 )]
 extern crate chrono;
 
+use chrono::Utc;
 use std::borrow::Cow;
 use std::future::Future;
 use std::net::UdpSocket;
@@ -91,11 +100,9 @@ use std::sync::{mpsc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use chrono::Utc;
-
 pub use self::error::DogstatsdError;
 use self::metrics::*;
-pub use self::metrics::{ServiceCheckOptions, ServiceStatus};
+pub use self::metrics::{EventAlertType, EventPriority, ServiceCheckOptions, ServiceStatus};
 
 mod error;
 mod metrics;
@@ -862,7 +869,9 @@ impl Client {
     ///   let client = Client::new(Options::default()).unwrap();
     ///   client.event("Event Title", "Event Body", &["tag:event"])
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+    ///
     /// ```
+
     pub fn event<'a, I, S, SS, T>(&self, title: S, text: SS, tags: I) -> DogstatsdResult
     where
         I: IntoIterator<Item = T>,
@@ -874,6 +883,64 @@ impl Client {
             &Event::new(title.into().as_ref(), text.into().as_ref()),
             tags,
         )
+    }
+
+    /// Send a custom event as a title and a body
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///   use dogstatsd::{Client, Options, EventOptions, EventAlertType, EventPriority};
+    ///
+    ///   let client = Client::new(Options::default()).unwrap();
+    ///   let event_options = EventOptions::new()
+    ///     .with_timestamp(1638480000)
+    ///     .with_hostname("localhost")
+    ///     .with_priority(EventPriority::Normal)
+    ///     .with_alert_type(EventAlertType::Error);
+    ///   client.event_with_options("My Custom Event Title", "My Custom Event Body", &["tag:event"], Some(event_options))
+    ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
+
+    pub fn event_with_options<'a, I, S, SS, T>(
+        &self,
+        title: S,
+        text: SS,
+        tags: I,
+        options: Option<EventOptions<'a>>,
+    ) -> DogstatsdResult
+    where
+        I: IntoIterator<Item = T>,
+        S: Into<Cow<'a, str>>,
+        SS: Into<Cow<'a, str>>,
+        T: AsRef<str>,
+    {
+        let title_owned = title.into();
+        let text_owned = text.into();
+        let mut event = Event::new(title_owned.as_ref(), text_owned.as_ref());
+
+        // Apply additional options if provided
+        if let Some(options) = options {
+            if let Some(timestamp) = options.timestamp {
+                event = event.with_timestamp(timestamp);
+            }
+            if let Some(hostname) = options.hostname {
+                event = event.with_hostname(hostname);
+            }
+            if let Some(aggregation_key) = options.aggregation_key {
+                event = event.with_aggregation_key(aggregation_key);
+            }
+            if let Some(priority) = options.priority {
+                event = event.with_priority(priority);
+            }
+            if let Some(source_type_name) = options.source_type_name {
+                event = event.with_source_type_name(source_type_name);
+            }
+            if let Some(alert_type) = options.alert_type {
+                event = event.with_alert_type(alert_type);
+            }
+        }
+
+        self.send(&event, tags)
     }
 
     fn send<I, M, S>(&self, metric: &M, tags: I) -> DogstatsdResult
@@ -901,6 +968,93 @@ impl Client {
             }
         }
         Ok(())
+    }
+}
+
+/// Configuration options for an `Event`.
+///
+/// `EventOptions` provides additional optional metadata that can be attached
+/// to an event, enabling greater flexibility and contextual information
+/// for event handling and monitoring systems.
+///
+/// # Example
+///
+/// ```rust
+/// use dogstatsd::{EventOptions, EventAlertType, EventPriority};
+///
+/// let options = EventOptions {
+///     timestamp: Some(1638480000),
+///     hostname: Some("localhost"),
+///     aggregation_key: Some("service_down"),
+///     priority: Some(EventPriority::Normal),
+///     source_type_name: Some("monitoring"),
+///     alert_type: Some(EventAlertType::Error),
+/// };
+/// ```
+///
+#[derive(Debug, PartialEq)]
+pub struct EventOptions<'a> {
+    /// Optional Unix timestamp representing the event time. The default is the current Unix epoch timestamp.
+    pub timestamp: Option<u64>,
+    /// Optional hostname associated with the event.
+    pub hostname: Option<&'a str>,
+    /// Optional key for grouping related events.
+    pub aggregation_key: Option<&'a str>,
+    /// Optional priority level of the event, e.g., `"low"` or `"normal"`.
+    pub priority: Option<EventPriority>,
+    /// Optional source type name of the event, e.g., `"monitoring"`.
+    pub source_type_name: Option<&'a str>,
+    /// Optional alert type for the event, e.g., `"error"`, `"warning"`,  `"info"`, `"success"`. Default `"info"`.
+    pub alert_type: Option<EventAlertType>,
+}
+
+impl<'a> EventOptions<'a> {
+    /// Creates a new `EventOptions` instance with all fields set to `None`.
+    /// ```
+    pub fn new() -> Self {
+        EventOptions {
+            timestamp: None,
+            hostname: None,
+            aggregation_key: None,
+            priority: None,
+            source_type_name: None,
+            alert_type: None,
+        }
+    }
+    /// Sets the `hostname` for the event.
+    pub fn with_timestamp(mut self, timestamp: u64) -> Self {
+        self.timestamp = Some(timestamp);
+        self
+    }
+
+    /// Sets the `hostname` for the event.
+    pub fn with_hostname(mut self, hostname: &'a str) -> Self {
+        self.hostname = Some(hostname);
+        self
+    }
+
+    /// Sets the `aggregation_key` for the event.
+    pub fn with_aggregation_key(mut self, aggregation_key: &'a str) -> Self {
+        self.aggregation_key = Some(aggregation_key);
+        self
+    }
+
+    /// Sets the `priority` for the event.
+    pub fn with_priority(mut self, priority: EventPriority) -> Self {
+        self.priority = Some(priority);
+        self
+    }
+
+    /// Sets the `source_type_name` for the event.
+    pub fn with_source_type_name(mut self, source_type_name: &'a str) -> Self {
+        self.source_type_name = Some(source_type_name);
+        self
+    }
+
+    /// Sets the `alert_type` for the event.
+    pub fn with_alert_type(mut self, alert_type: EventAlertType) -> Self {
+        self.alert_type = Some(alert_type);
+        self
     }
 }
 
@@ -1290,7 +1444,29 @@ mod bench {
         let tags = vec!["name1:value1"];
         b.iter(|| {
             client
-                .event("Test Event Title", "Test Event Message", &tags)
+                .event("Test Event Title", "Test Event Message", &tags, None)
+                .unwrap();
+        })
+    }
+
+    fn bench_event_options(b: &mut Bencher) {
+        let options = Options::default();
+        let client = Client::new(options).unwrap();
+        let tags = vec!["name1:value1"];
+        let event_options = EventOptions::new()
+            .with_timestamp(1638480000)
+            .with_hostname("localhost")
+            .with_priority("normal")
+            .with_alert_type("error");
+
+        b.iter(|| {
+            client
+                .event(
+                    "Test Event Title",
+                    "Test Event Message",
+                    &tags,
+                    Some(event_options),
+                )
                 .unwrap();
         })
     }
