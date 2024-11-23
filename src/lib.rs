@@ -1010,7 +1010,6 @@ pub struct EventOptions<'a> {
 
 impl<'a> EventOptions<'a> {
     /// Creates a new `EventOptions` instance with all fields set to `None`.
-    /// ```
     pub fn new() -> Self {
         EventOptions {
             timestamp: None,

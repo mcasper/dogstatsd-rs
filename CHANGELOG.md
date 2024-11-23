@@ -8,11 +8,17 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.0] - 2024-11-23
+
+### Added
+
+- Support for sending custom events with all available options - https://github.com/mcasper/dogstatsd-rs/pull/70
+
 ## [0.11.1] - 2023-11-22
 
 ### Changed
 
-Don't require static strings for ServiceCheckOptions - https://github.com/mcasper/dogstatsd-rs/pull/65
+- Don't require static strings for ServiceCheckOptions - https://github.com/mcasper/dogstatsd-rs/pull/65
 
 ## [0.11.0] - 2023-09-27
 
