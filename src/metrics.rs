@@ -333,10 +333,11 @@ impl<'a> ServiceCheck<'a> {
 }
 
 /// Represents priority levels for an event.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub enum EventPriority {
     ///low
     Low,
+    #[default]
     ///normal
     Normal,
 }
@@ -352,8 +353,9 @@ impl EventPriority {
 }
 
 /// Represents alert types for an event.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub enum EventAlertType {
+    #[default]
     /// info
     Info,
     /// warning
