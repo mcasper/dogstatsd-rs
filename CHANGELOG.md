@@ -8,6 +8,12 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.1] - 2024-11-27
+
+### Added
+
+- Copy/Clone to EventOptions - https://github.com/mcasper/dogstatsd-rs/pull/71
+
 ## [0.12.0] - 2024-11-23
 
 ### Added
