@@ -992,7 +992,7 @@ impl Client {
 /// };
 /// ```
 ///
-#[derive(Debug, PartialEq)]
+#[derive(Default, Clone, Copy, Debug)]
 pub struct EventOptions<'a> {
     /// Optional Unix timestamp representing the event time. The default is the current Unix epoch timestamp.
     pub timestamp: Option<u64>,
@@ -1455,8 +1455,8 @@ mod bench {
         let event_options = EventOptions::new()
             .with_timestamp(1638480000)
             .with_hostname("localhost")
-            .with_priority("normal")
-            .with_alert_type("error");
+            .with_priority(EventPriority::Normal)
+            .with_alert_type(EventAlertType::Error);
 
         b.iter(|| {
             client
