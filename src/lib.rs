@@ -1173,6 +1173,7 @@ mod batch_processor {
 #[cfg(test)]
 mod tests {
     use metrics::GaugeMetric;
+    use serial_test::serial;
 
     use super::*;
 
@@ -1223,6 +1224,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_new() {
         let client = Client::new(Options::default()).unwrap();
         let expected_client = Client {
@@ -1237,6 +1239,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_new_default_tags() {
         let options = Options::new(
             DEFAULT_FROM_ADDR,
@@ -1259,6 +1262,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_system_tags() {
         let options = Options::new(
             DEFAULT_FROM_ADDR,
@@ -1299,13 +1303,17 @@ mod tests {
     }
 
     fn with_default_system_tags<T, F: FnOnce() -> T>(f: F) -> T {
-        std::env::set_var("DD_ENV", "production");
-        std::env::set_var("DD_SERVICE", "service");
-        std::env::set_var("DD_VERSION", "0.0.1");
+        unsafe {
+            std::env::set_var("DD_ENV", "production");
+            std::env::set_var("DD_SERVICE", "service");
+            std::env::set_var("DD_VERSION", "0.0.1");
+        }
         let t = f();
-        std::env::remove_var("DD_ENV");
-        std::env::remove_var("DD_SERVICE");
-        std::env::remove_var("DD_VERSION");
+        unsafe {
+            std::env::remove_var("DD_ENV");
+            std::env::remove_var("DD_SERVICE");
+            std::env::remove_var("DD_VERSION");
+        }
         t
     }
 }

@@ -1,9 +1,9 @@
 mod support;
 
-use std::{thread, time::Duration};
+use std::time::Duration;
 
 use dogstatsd::{BatchingOptions, Client, OptionsBuilder};
-use tokio::{sync::mpsc::Receiver, time::timeout};
+use tokio::{sync::mpsc::Receiver, time::{sleep, timeout}};
 
 use crate::support::TestServer;
 
@@ -65,7 +65,7 @@ async fn batching_test() {
     // The batch processor requires a metric to be sent _after_ the timeout has been reached
     // to flush the buffer. Ideally there would be a separate timer running to automatically flush it,
     // but for now we'll make do with a sleep.
-    thread::sleep(Duration::from_secs(2));
+    sleep(Duration::from_secs(2)).await;
 
     client
         .timing("my_timing", 311, &["tag1:value1"])
