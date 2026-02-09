@@ -8,6 +8,14 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-02-09
+
+### Changed
+
+- Disable UDS support on Windows (returns an unsupported-platform error when a socket path is configured) - https://github.com/mcasper/dogstatsd-rs/pull/75
+- Test suite updates and reliability improvements (async sleep usage and serialized env-var tests) - https://github.com/mcasper/dogstatsd-rs/pull/74
+- Cargo clippy cleanup - https://github.com/mcasper/dogstatsd-rs/commit/a289cd4
+
 ## [0.12.1] - 2024-11-27
 
 ### Added
