@@ -94,6 +94,7 @@ use chrono::Utc;
 use std::borrow::Cow;
 use std::future::Future;
 use std::net::UdpSocket;
+#[cfg(unix)]
 use std::os::unix::net::UnixDatagram;
 use std::sync::mpsc::Sender;
 use std::sync::{mpsc, Mutex};
@@ -397,8 +398,10 @@ impl OptionsBuilder {
 #[derive(Debug)]
 enum SocketType {
     Udp(UdpSocket),
+    #[cfg(unix)]
     Uds(UnixDatagram),
     BatchableUdp(Mutex<Sender<batch_processor::Message>>),
+    #[cfg(unix)]
     BatchableUds(Mutex<Sender<batch_processor::Message>>),
 }
 
@@ -425,8 +428,14 @@ impl PartialEq for Client {
 impl Drop for Client {
     fn drop(&mut self) {
         match &self.socket {
-            SocketType::BatchableUdp(tx_channel) | SocketType::BatchableUds(tx_channel) => {
-                // Destructing Client... If fails, ignore and keep going...
+            SocketType::BatchableUdp(tx_channel) => {
+                let _ = tx_channel
+                    .lock()
+                    .unwrap()
+                    .send(batch_processor::Message::Shutdown);
+            }
+            #[cfg(unix)]
+            SocketType::BatchableUds(tx_channel) => {
                 let _ = tx_channel
                     .lock()
                     .unwrap()
@@ -460,13 +469,19 @@ impl Client {
             Mutex::from(tx)
         };
 
-        let socket = match options.socket_path {
-            Some(socket_path) => {
+        let socket = if options.socket_path.is_some() {
+            #[cfg(unix)]
+            {
+                let socket_path = options
+                    .socket_path
+                    .clone()
+                    .expect("checked is_some above");
+
                 // The follow scenarios can occur:
                 // - socket does not exist yet: We will call .bind(...) to create one
                 // - socket exists, but no listener: We will retry attempting to connect
                 //   however, if no listener subscribes to the socket within retries, we will
-                //   failt to initialize
+                //   fail to initialize
                 // - socket exists, with a listener: Calling .connect(...) will work successfully
                 let mut uds_socket = UnixDatagram::unbound()?;
                 match uds_socket.connect(socket_path.clone()) {
@@ -492,18 +507,24 @@ impl Client {
                     wrapped_socket
                 }
             }
-            None => {
-                let wrapped_socket = SocketType::Udp(UdpSocket::bind(&options.from_addr)?);
-                if let Some(batching_options) = options.batching_options {
-                    SocketType::BatchableUdp(fn_create_tx_channel(
-                        wrapped_socket,
-                        batching_options,
-                        options.to_addr.clone(),
-                        None,
-                    ))
-                } else {
-                    wrapped_socket
-                }
+            #[cfg(not(unix))]
+            {
+                return Err(DogstatsdError::from(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "Unix domain sockets are not supported on this platform",
+                )));
+            }
+        } else {
+            let wrapped_socket = SocketType::Udp(UdpSocket::bind(&options.from_addr)?);
+            if let Some(batching_options) = options.batching_options {
+                SocketType::BatchableUdp(fn_create_tx_channel(
+                    wrapped_socket,
+                    batching_options,
+                    options.to_addr.clone(),
+                    None,
+                ))
+            } else {
+                wrapped_socket
             }
         };
 
@@ -954,10 +975,21 @@ impl Client {
             SocketType::Udp(socket) => {
                 socket.send_to(formatted_metric.as_slice(), &self.to_addr)?;
             }
+            #[cfg(unix)]
             SocketType::Uds(socket) => {
                 socket.send(formatted_metric.as_slice())?;
             }
-            SocketType::BatchableUdp(tx_channel) | SocketType::BatchableUds(tx_channel) => {
+            SocketType::BatchableUdp(tx_channel) => {
+                tx_channel
+                    .lock()
+                    .expect("Mutex poisoned...")
+                    .send(batch_processor::Message::Data(formatted_metric))
+                    .unwrap_or_else(|error| {
+                        println!("Exception occurred when writing to channel: {:?}", error);
+                    });
+            }
+            #[cfg(unix)]
+            SocketType::BatchableUds(tx_channel) => {
                 tx_channel
                     .lock()
                     .expect("Mutex poisoned...")
@@ -1075,7 +1107,7 @@ mod batch_processor {
         socket: &SocketType,
         data: &Vec<u8>,
         to_addr: &String,
-        socket_path: &Option<String>,
+        _socket_path: &Option<String>,
     ) {
         retry(
             Exponential::from_millis(batching_options.initial_retry_delay)
@@ -1088,12 +1120,13 @@ mod batch_processor {
                             return Err(error);
                         }
                     }
+                    #[cfg(unix)]
                     SocketType::Uds(socket) => {
                         if let Err(error) = socket.send(data.as_slice()) {
                             // Per https://doc.rust-lang.org/stable/std/os/unix/net/struct.UnixDatagram.html#method.send
                             // If send fails, it is due to a connection issue, so just attempt
                             // to reconnect
-                            let socket_path_unwrapped = socket_path
+                            let socket_path_unwrapped = _socket_path
                                 .as_ref()
                                 .expect("Only invoked if socket path is defined.");
                             socket.connect(socket_path_unwrapped)?;
@@ -1101,8 +1134,11 @@ mod batch_processor {
                             return Err(error);
                         }
                     }
-                    SocketType::BatchableUdp(_tx_channel)
-                    | SocketType::BatchableUds(_tx_channel) => {
+                    SocketType::BatchableUdp(_tx_channel) => {
+                        panic!("Logic Error - socket type should not be batchable.");
+                    }
+                    #[cfg(unix)]
+                    SocketType::BatchableUds(_tx_channel) => {
                         panic!("Logic Error - socket type should not be batchable.");
                     }
                 }
