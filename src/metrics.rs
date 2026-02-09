@@ -4,7 +4,7 @@ pub fn format_for_send<M, I, S>(
     in_metric: &M,
     in_namespace: &str,
     tags: I,
-    default_tags: &Vec<u8>,
+    default_tags: &[u8],
 ) -> Vec<u8>
 where
     M: Metric,

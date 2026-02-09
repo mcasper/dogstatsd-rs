@@ -209,29 +209,17 @@ impl Options {
     fn merge_with_system_tags(default_tags: Vec<String>) -> Vec<String> {
         let mut merged_tags = default_tags;
 
-        if merged_tags
-            .iter()
-            .find(|tag| tag.starts_with("env:"))
-            .is_none()
-        {
+        if !merged_tags.iter().any(|tag| tag.starts_with("env:")) {
             if let Ok(env) = std::env::var("DD_ENV") {
                 merged_tags.push(format!("env:{}", env));
             }
         }
-        if merged_tags
-            .iter()
-            .find(|tag| tag.starts_with("service:"))
-            .is_none()
-        {
+        if !merged_tags.iter().any(|tag| tag.starts_with("service:")) {
             if let Ok(service) = std::env::var("DD_SERVICE") {
                 merged_tags.push(format!("service:{}", service));
             }
         }
-        if merged_tags
-            .iter()
-            .find(|tag| tag.starts_with("version:"))
-            .is_none()
-        {
+        if !merged_tags.iter().any(|tag| tag.starts_with("version:")) {
             if let Ok(version) = std::env::var("DD_VERSION") {
                 merged_tags.push(format!("version:{}", version));
             }
@@ -892,7 +880,6 @@ impl Client {
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
     ///
     /// ```
-
     pub fn event<'a, I, S, SS, T>(&self, title: S, text: SS, tags: I) -> DogstatsdResult
     where
         I: IntoIterator<Item = T>,
@@ -921,7 +908,6 @@ impl Client {
     ///     .with_alert_type(EventAlertType::Error);
     ///   client.event_with_options("My Custom Event Title", "My Custom Event Body", &["tag:event"], Some(event_options))
     ///       .unwrap_or_else(|e| println!("Encountered error: {}", e));
-
     pub fn event_with_options<'a, I, S, SS, T>(
         &self,
         title: S,
@@ -1116,9 +1102,7 @@ mod batch_processor {
             || {
                 match socket {
                     SocketType::Udp(socket) => {
-                        if let Err(error) = socket.send_to(data.as_slice(), to_addr) {
-                            return Err(error);
-                        }
+                        socket.send_to(data.as_slice(), to_addr)?;
                     }
                     #[cfg(unix)]
                     SocketType::Uds(socket) => {
