@@ -8,6 +8,12 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.3] - 2026-02-16
+
+### Fixed
+
+- Fix non-Unix build break from clippy retry refactor - https://github.com/mcasper/dogstatsd-rs/commit/d4233d3
+
 ## [0.12.2] - 2026-02-09
 
 ### Changed
