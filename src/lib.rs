@@ -1099,7 +1099,7 @@ mod batch_processor {
             Exponential::from_millis(batching_options.initial_retry_delay)
                 .map(jitter)
                 .take(batching_options.max_retry_attempts),
-            || {
+            || -> Result<(), std::io::Error> {
                 match socket {
                     SocketType::Udp(socket) => {
                         socket.send_to(data.as_slice(), to_addr)?;
