@@ -96,7 +96,7 @@ use std::future::Future;
 use std::net::UdpSocket;
 #[cfg(unix)]
 use std::os::unix::net::UnixDatagram;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Sender, SyncSender};
 use std::sync::{mpsc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -125,6 +125,10 @@ pub struct BatchingOptions {
     pub max_retry_attempts: usize,
     /// Upon retry, there is an exponential backoff, this value sets the starting value
     pub initial_retry_delay: u64,
+    /// Optional bound on the MPSC channel. When `Some(n)`, uses a bounded channel
+    /// and silently drops metrics when the channel is full. When `None`, uses an
+    /// unbounded channel (current behavior).
+    pub max_channel_size: Option<usize>,
 }
 
 /// The struct that represents the options available for the Dogstatsd client.
@@ -338,7 +342,7 @@ impl OptionsBuilder {
     ///   use dogstatsd::{ OptionsBuilder, BatchingOptions };
     ///   use std::time::Duration;
     ///
-    ///   let options_builder = OptionsBuilder::new().batching_options(BatchingOptions { max_buffer_size: 8000, max_time: Duration::from_millis(3000), max_retry_attempts: 3, initial_retry_delay: 10 });
+    ///   let options_builder = OptionsBuilder::new().batching_options(BatchingOptions { max_buffer_size: 8000, max_time: Duration::from_millis(3000), max_retry_attempts: 3, initial_retry_delay: 10, max_channel_size: None });
     /// ```
     pub fn batching_options(&mut self, batching_options: BatchingOptions) -> &mut OptionsBuilder {
         self.batching_options = Some(batching_options);
@@ -384,13 +388,35 @@ impl OptionsBuilder {
 }
 
 #[derive(Debug)]
+enum ChannelSender {
+    Unbounded(Sender<batch_processor::Message>),
+    Bounded(SyncSender<batch_processor::Message>),
+}
+
+impl ChannelSender {
+    fn send(&self, msg: batch_processor::Message) {
+        match self {
+            ChannelSender::Unbounded(tx) => {
+                tx.send(msg).unwrap_or_else(|e| {
+                    println!("Exception occurred when writing to channel: {:?}", e);
+                });
+            }
+            ChannelSender::Bounded(tx) => {
+                // Silently drop if channel is full — fire-and-forget semantics
+                let _ = tx.try_send(msg);
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
 enum SocketType {
     Udp(UdpSocket),
     #[cfg(unix)]
     Uds(UnixDatagram),
-    BatchableUdp(Mutex<Sender<batch_processor::Message>>),
+    BatchableUdp(Mutex<ChannelSender>),
     #[cfg(unix)]
-    BatchableUds(Mutex<Sender<batch_processor::Message>>),
+    BatchableUds(Mutex<ChannelSender>),
 }
 
 /// The client struct that handles sending metrics to the Dogstatsd server.
@@ -417,14 +443,14 @@ impl Drop for Client {
     fn drop(&mut self) {
         match &self.socket {
             SocketType::BatchableUdp(tx_channel) => {
-                let _ = tx_channel
+                tx_channel
                     .lock()
                     .unwrap()
                     .send(batch_processor::Message::Shutdown);
             }
             #[cfg(unix)]
             SocketType::BatchableUds(tx_channel) => {
-                let _ = tx_channel
+                tx_channel
                     .lock()
                     .unwrap()
                     .send(batch_processor::Message::Shutdown);
@@ -449,12 +475,21 @@ impl Client {
                                     batching_options: BatchingOptions,
                                     to_addr: String,
                                     socket_path: Option<String>|
-         -> Mutex<Sender<batch_processor::Message>> {
-            let (tx, rx) = mpsc::channel();
+         -> Mutex<ChannelSender> {
+            let (sender, rx) = match batching_options.max_channel_size {
+                Some(size) => {
+                    let (tx, rx) = mpsc::sync_channel(size);
+                    (ChannelSender::Bounded(tx), rx)
+                }
+                None => {
+                    let (tx, rx) = mpsc::channel();
+                    (ChannelSender::Unbounded(tx), rx)
+                }
+            };
             thread::spawn(move || {
                 batch_processor::process_events(batching_options, to_addr, socket, socket_path, rx);
             });
-            Mutex::from(tx)
+            Mutex::from(sender)
         };
 
         let socket = if options.socket_path.is_some() {
@@ -969,20 +1004,14 @@ impl Client {
                 tx_channel
                     .lock()
                     .expect("Mutex poisoned...")
-                    .send(batch_processor::Message::Data(formatted_metric))
-                    .unwrap_or_else(|error| {
-                        println!("Exception occurred when writing to channel: {:?}", error);
-                    });
+                    .send(batch_processor::Message::Data(formatted_metric));
             }
             #[cfg(unix)]
             SocketType::BatchableUds(tx_channel) => {
                 tx_channel
                     .lock()
                     .expect("Mutex poisoned...")
-                    .send(batch_processor::Message::Data(formatted_metric))
-                    .unwrap_or_else(|error| {
-                        println!("Exception occurred when writing to channel: {:?}", error);
-                    });
+                    .send(batch_processor::Message::Data(formatted_metric));
             }
         }
         Ok(())

@@ -46,6 +46,7 @@ async fn batching_test() {
             max_buffer_size: 1024,
             max_retry_attempts: 0,
             initial_retry_delay: 25,
+            max_channel_size: None,
         })
         .build();
     let client = Client::new(opts).unwrap();
