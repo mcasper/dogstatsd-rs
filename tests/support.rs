@@ -66,6 +66,10 @@ impl TestServer {
         self.messages.last()
     }
 
+    pub fn messages(&self) -> &[String] {
+        &self.messages
+    }
+
     pub fn next_message_received(&mut self) -> Receiver<()> {
         let (tx, rx) = mpsc::channel::<()>(1);
         self.on_next_message = Some(tx);
