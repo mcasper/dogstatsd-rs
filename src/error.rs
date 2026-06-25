@@ -40,7 +40,7 @@ mod tests {
 
     #[test]
     fn test_error_display() {
-        let err = DogstatsdError::from(io::Error::new(io::ErrorKind::Other, "oh no!"));
+        let err = DogstatsdError::from(io::Error::other("oh no!"));
         assert_eq!(format!("{}", err), "oh no!".to_owned());
     }
 }

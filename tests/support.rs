@@ -22,7 +22,7 @@ impl TestServer {
         tokio::spawn(async move {
             let socket = UdpSocket::bind(address.clone())
                 .await
-                .expect(&format!("unable to bind to {:?}", address));
+                .unwrap_or_else(|_| panic!("unable to bind to {:?}", address));
 
             // Signify that we're listening
             tx.send(()).unwrap();

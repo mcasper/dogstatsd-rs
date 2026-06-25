@@ -1,6 +1,6 @@
 # dogstatsd-rs
 
-[![Build Status](https://travis-ci.org/mcasper/dogstatsd-rs.svg?branch=master)](https://travis-ci.org/mcasper/dogstatsd-rs)
+[![CI](https://github.com/mcasper/dogstatsd-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/mcasper/dogstatsd-rs/actions/workflows/ci.yml)
 [![Crate Version](https://img.shields.io/crates/v/dogstatsd.svg)](https://crates.io/crates/dogstatsd)
 
 A Rust client for interacting with Dogstatsd

@@ -3,7 +3,10 @@ mod support;
 use std::time::Duration;
 
 use dogstatsd::{BatchingOptions, Client, OptionsBuilder};
-use tokio::{sync::mpsc::Receiver, time::{sleep, timeout}};
+use tokio::{
+    sync::mpsc::Receiver,
+    time::{sleep, timeout},
+};
 
 use crate::support::TestServer;
 
@@ -21,11 +24,14 @@ async fn simple_metric_test() {
         promise = shared.next_message_received();
     }
     client
-        .gauge("my_stat", "7", &["tag1:value1"])
+        .gauge("my_stat", "7", ["tag1:value1"])
         .expect("unable to send stat");
 
-    if let Err(_) = timeout(Duration::from_secs(1), promise.recv()).await {
-        assert!(false, "Didn't receive next message within a second");
+    if timeout(Duration::from_secs(1), promise.recv())
+        .await
+        .is_err()
+    {
+        panic!("Didn't receive next message within a second");
     }
 
     {
@@ -56,10 +62,10 @@ async fn batching_test() {
         promise = shared.next_message_received();
     }
     client
-        .gauge("my_stat", "7", &["tag1:value1"])
+        .gauge("my_stat", "7", ["tag1:value1"])
         .expect("unable to send stat");
     client
-        .count("my_count", 29, &["tag1:value1"])
+        .count("my_count", 29, ["tag1:value1"])
         .expect("unable to send stat");
 
     // The batch processor requires a metric to be sent _after_ the timeout has been reached
@@ -68,11 +74,14 @@ async fn batching_test() {
     sleep(Duration::from_secs(2)).await;
 
     client
-        .timing("my_timing", 311, &["tag1:value1"])
+        .timing("my_timing", 311, ["tag1:value1"])
         .expect("unable to send stat");
 
-    if let Err(_) = timeout(Duration::from_secs(5), promise.recv()).await {
-        assert!(false, "Didn't receive next batch within 5 seconds");
+    if timeout(Duration::from_secs(5), promise.recv())
+        .await
+        .is_err()
+    {
+        panic!("Didn't receive next batch within 5 seconds");
     }
 
     {

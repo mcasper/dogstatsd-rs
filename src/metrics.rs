@@ -307,19 +307,19 @@ impl<'a> Metric for ServiceCheck<'a> {
         buf.push('|');
         buf.push_str(&format!("{}", self.val.to_int()));
 
-        if self.options.timestamp.is_some() {
+        if let Some(timestamp) = self.options.timestamp {
             buf.push_str("|d:");
-            buf.push_str(&format!("{}", self.options.timestamp.unwrap()));
+            buf.push_str(&format!("{}", timestamp));
         }
 
-        if self.options.hostname.is_some() {
+        if let Some(hostname) = self.options.hostname {
             buf.push_str("|h:");
-            buf.push_str(self.options.hostname.unwrap());
+            buf.push_str(hostname);
         }
 
-        if self.options.message.is_some() {
+        if let Some(message) = self.options.message {
             buf.push_str("|m:");
-            buf.push_str(self.options.message.unwrap());
+            buf.push_str(message);
         }
 
         buf
@@ -524,7 +524,7 @@ mod tests {
             &format_for_send(
                 &CountMetric::Incr("foo", 1),
                 "",
-                &["tag:1", "tag:2"],
+                ["tag:1", "tag:2"],
                 &String::default().into_bytes()
             )[..]
         )
@@ -537,7 +537,7 @@ mod tests {
             &format_for_send(
                 &CountMetric::Incr("foo", 1),
                 "namespace",
-                &["tag:1", "tag:2"],
+                ["tag:1", "tag:2"],
                 &String::from("defaultag:3,seconddefault:4").into_bytes()
             )[..]
         )
@@ -550,7 +550,7 @@ mod tests {
             &format_for_send(
                 &CountMetric::Incr("foo", 1),
                 "namespace",
-                &["tag:1", "tag:2"],
+                ["tag:1", "tag:2"],
                 &String::from("defaultag:3,seconddefault:4").into_bytes()
             )[..]
         )
@@ -561,9 +561,9 @@ mod tests {
         assert_eq!(
             &b"_e{5,4}:title|text|#tag:1,tag:2"[..],
             &format_for_send(
-                &Event::new("title".into(), "text".into()),
+                &Event::new("title", "text"),
                 "namespace",
-                &["tag:1", "tag:2"],
+                ["tag:1", "tag:2"],
                 &String::default().into_bytes()
             )[..]
         )
@@ -584,32 +584,32 @@ mod tests {
 
     #[test]
     fn test_count_incr_metric() {
-        let metric = CountMetric::Incr("incr".into(), 1);
+        let metric = CountMetric::Incr("incr", 1);
 
         assert_eq!("incr:1|c", metric.metric_type_format())
     }
 
     #[test]
     fn test_count_decr_metric() {
-        let metric = CountMetric::Decr("decr".into(), 1);
+        let metric = CountMetric::Decr("decr", 1);
 
         assert_eq!("decr:-1|c", metric.metric_type_format())
     }
 
     #[test]
     fn test_count_decr_by_value_metric() {
-        let metric = CountMetric::Decr("decr".into(), 35);
+        let metric = CountMetric::Decr("decr", 35);
 
         assert_eq!("decr:-35|c", metric.metric_type_format())
     }
 
     #[test]
     fn test_count_metric() {
-        let metric = CountMetric::Arbitrary("arb".into(), 54321);
+        let metric = CountMetric::Arbitrary("arb", 54321);
         assert_eq!("arb:54321|c", metric.metric_type_format());
-        let metric = CountMetric::Arbitrary("arb".into(), -12345);
+        let metric = CountMetric::Arbitrary("arb", -12345);
         assert_eq!("arb:-12345|c", metric.metric_type_format());
-        let metric = CountMetric::Arbitrary("arb".into(), 0);
+        let metric = CountMetric::Arbitrary("arb", 0);
         assert_eq!("arb:0|c", metric.metric_type_format());
     }
 
@@ -619,42 +619,42 @@ mod tests {
         let end_time = Utc
             .timestamp_millis_opt(start_time.timestamp_millis() + 900)
             .unwrap();
-        let metric = TimeMetric::new("time".into(), &start_time, &end_time);
+        let metric = TimeMetric::new("time", &start_time, &end_time);
 
         assert_eq!("time:900|ms", metric.metric_type_format())
     }
 
     #[test]
     fn test_timing_metric() {
-        let metric = TimingMetric::new("timing".into(), 720);
+        let metric = TimingMetric::new("timing", 720);
 
         assert_eq!("timing:720|ms", metric.metric_type_format())
     }
 
     #[test]
     fn test_gauge_metric() {
-        let metric = GaugeMetric::new("gauge".into(), "12345".into());
+        let metric = GaugeMetric::new("gauge", "12345");
 
         assert_eq!("gauge:12345|g", metric.metric_type_format())
     }
 
     #[test]
     fn test_histogram_metric() {
-        let metric = HistogramMetric::new("histogram".into(), "67890".into());
+        let metric = HistogramMetric::new("histogram", "67890");
 
         assert_eq!("histogram:67890|h", metric.metric_type_format())
     }
 
     #[test]
     fn test_distribution_metric() {
-        let metric = DistributionMetric::new("distribution".into(), "67890".into());
+        let metric = DistributionMetric::new("distribution", "67890");
 
         assert_eq!("distribution:67890|d", metric.metric_type_format())
     }
 
     #[test]
     fn test_set_metric() {
-        let metric = SetMetric::new("set".into(), "13579".into());
+        let metric = SetMetric::new("set", "13579");
 
         assert_eq!("set:13579|s", metric.metric_type_format())
     }
@@ -662,7 +662,7 @@ mod tests {
     #[test]
     fn test_service_check() {
         let metric = ServiceCheck::new(
-            "redis.can_connect".into(),
+            "redis.can_connect",
             ServiceStatus::Warning,
             ServiceCheckOptions::default(),
         );
@@ -676,7 +676,7 @@ mod tests {
             timestamp: Some(1234567890),
             ..Default::default()
         };
-        let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, options);
+        let metric = ServiceCheck::new("redis.can_connect", ServiceStatus::Warning, options);
 
         assert_eq!(
             "_sc|redis.can_connect|1|d:1234567890",
@@ -690,7 +690,7 @@ mod tests {
             hostname: Some("my_server.localhost"),
             ..Default::default()
         };
-        let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, options);
+        let metric = ServiceCheck::new("redis.can_connect", ServiceStatus::Warning, options);
 
         assert_eq!(
             "_sc|redis.can_connect|1|h:my_server.localhost",
@@ -704,7 +704,7 @@ mod tests {
             message: Some("Service is possibly down"),
             ..Default::default()
         };
-        let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, options);
+        let metric = ServiceCheck::new("redis.can_connect", ServiceStatus::Warning, options);
 
         assert_eq!(
             "_sc|redis.can_connect|1|m:Service is possibly down",
@@ -719,7 +719,7 @@ mod tests {
             hostname: Some("my_server.localhost"),
             message: Some("Service is possibly down"),
         };
-        let metric = ServiceCheck::new("redis.can_connect".into(), ServiceStatus::Warning, options);
+        let metric = ServiceCheck::new("redis.can_connect", ServiceStatus::Warning, options);
 
         assert_eq!(
             "_sc|redis.can_connect|1|d:1234567890|h:my_server.localhost|m:Service is possibly down",
@@ -729,10 +729,7 @@ mod tests {
 
     #[test]
     fn test_event() {
-        let metric = Event::new(
-            "Event Title".into(),
-            "Event Body - Something Happened".into(),
-        );
+        let metric = Event::new("Event Title", "Event Body - Something Happened");
 
         assert_eq!(
             "_e{11,31}:Event Title|Event Body - Something Happened",
@@ -742,16 +739,13 @@ mod tests {
 
     #[test]
     fn test_event_with_options() {
-        let metric = Event::new(
-            "Event Title".into(),
-            "Event Body - Something Happened".into(),
-        )
-        .with_timestamp(1638480000)
-        .with_hostname("localhost")
-        .with_aggregation_key("service_down")
-        .with_priority(EventPriority::Normal)
-        .with_source_type_name("monitoring")
-        .with_alert_type(EventAlertType::Error);
+        let metric = Event::new("Event Title", "Event Body - Something Happened")
+            .with_timestamp(1638480000)
+            .with_hostname("localhost")
+            .with_aggregation_key("service_down")
+            .with_priority(EventPriority::Normal)
+            .with_source_type_name("monitoring")
+            .with_alert_type(EventAlertType::Error);
 
         assert_eq!(
             "_e{11,31}:Event Title|Event Body - Something Happened|d:1638480000|h:localhost|k:service_down|p:normal|s:monitoring|t:error",

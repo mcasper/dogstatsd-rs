@@ -460,10 +460,7 @@ impl Client {
         let socket = if options.socket_path.is_some() {
             #[cfg(unix)]
             {
-                let socket_path = options
-                    .socket_path
-                    .clone()
-                    .expect("checked is_some above");
+                let socket_path = options.socket_path.clone().expect("checked is_some above");
 
                 // The follow scenarios can occur:
                 // - socket does not exist yet: We will call .bind(...) to create one
@@ -1235,7 +1232,7 @@ mod tests {
             from_addr: "127.0.0.2:0".into(),
             to_addr: "127.0.0.2:8125".into(),
             namespace: "mynamespace".into(),
-            default_tags: vec!["tag1:tag1val".into()].to_vec(),
+            default_tags: ["tag1:tag1val".into()].to_vec(),
             socket_path: None,
             batching_options: None,
         };
@@ -1315,10 +1312,7 @@ mod tests {
         let client = Client::new(options).unwrap();
         // Shouldn't panic or error
         client
-            .send(
-                &GaugeMetric::new("gauge".into(), "1234".into()),
-                &["tag1", "tag2"],
-            )
+            .send(&GaugeMetric::new("gauge", "1234"), ["tag1", "tag2"])
             .unwrap();
     }
 
