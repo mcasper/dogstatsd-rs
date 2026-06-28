@@ -8,9 +8,11 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.4] - 2026-06-28
+
 ### Fixed
 
-- Flush a batch before adding a metric that would exceed `BatchingOptions::max_buffer_size`.
+- Flush a batch before adding a metric that would exceed `BatchingOptions::max_buffer_size`. - https://github.com/mcasper/dogstatsd-rs/pull/78
 
 ## [0.12.3] - 2026-02-16
 
