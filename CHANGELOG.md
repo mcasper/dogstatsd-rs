@@ -8,6 +8,10 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Flush a batch before adding a metric that would exceed `BatchingOptions::max_buffer_size`.
+
 ## [0.12.3] - 2026-02-16
 
 ### Fixed

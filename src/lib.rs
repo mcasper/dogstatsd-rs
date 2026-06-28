@@ -1148,9 +1148,21 @@ mod batch_processor {
         loop {
             match rx.recv() {
                 Ok(Message::Data(data)) => {
-                    for ch in data {
-                        buffer.push(ch);
+                    let next_buffer_size = buffer.len() + data.len() + 1;
+
+                    if !buffer.is_empty() && next_buffer_size > batching_options.max_buffer_size {
+                        send_to_socket_with_retries(
+                            &batching_options,
+                            &socket,
+                            &buffer,
+                            &to_addr,
+                            &socket_path,
+                        );
+                        buffer.clear();
+                        last_updated = SystemTime::now();
                     }
+
+                    buffer.extend(data);
                     buffer.push(b'\n');
 
                     let current_time = SystemTime::now();
