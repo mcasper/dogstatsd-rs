@@ -3,10 +3,7 @@ mod support;
 use std::time::Duration;
 
 use dogstatsd::{BatchingOptions, Client, OptionsBuilder};
-use tokio::{
-    sync::mpsc::Receiver,
-    time::{sleep, timeout},
-};
+use tokio::{sync::mpsc::Receiver, time::timeout};
 
 use crate::support::TestServer;
 
@@ -68,15 +65,6 @@ async fn batching_test() {
         .count("my_count", 29, ["tag1:value1"])
         .expect("unable to send stat");
 
-    // The batch processor requires a metric to be sent _after_ the timeout has been reached
-    // to flush the buffer. Ideally there would be a separate timer running to automatically flush it,
-    // but for now we'll make do with a sleep.
-    sleep(Duration::from_secs(2)).await;
-
-    client
-        .timing("my_timing", 311, ["tag1:value1"])
-        .expect("unable to send stat");
-
     if timeout(Duration::from_secs(5), promise.recv())
         .await
         .is_err()
@@ -87,7 +75,7 @@ async fn batching_test() {
     {
         assert_eq!(
             server.lock().unwrap().last_metric().unwrap(),
-            "my_stat:7|g|#tag1:value1\nmy_count:29|c|#tag1:value1\nmy_timing:311|ms|#tag1:value1\n"
+            "my_stat:7|g|#tag1:value1\nmy_count:29|c|#tag1:value1\n"
         );
     }
 }

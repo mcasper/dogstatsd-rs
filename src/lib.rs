@@ -1073,8 +1073,8 @@ impl<'a> EventOptions<'a> {
 }
 
 mod batch_processor {
-    use std::sync::mpsc::Receiver;
-    use std::time::SystemTime;
+    use std::sync::mpsc::{Receiver, RecvTimeoutError};
+    use std::time::{Duration, Instant};
 
     use retry::{delay::jitter, delay::Exponential, retry};
 
@@ -1135,6 +1135,21 @@ mod batch_processor {
         });
     }
 
+    fn flush_buffer(
+        batching_options: &BatchingOptions,
+        socket: &SocketType,
+        buffer: &mut Vec<u8>,
+        to_addr: &String,
+        socket_path: &Option<String>,
+    ) {
+        if buffer.is_empty() {
+            return;
+        }
+
+        send_to_socket_with_retries(batching_options, socket, buffer, to_addr, socket_path);
+        buffer.clear();
+    }
+
     pub(crate) fn process_events(
         batching_options: BatchingOptions,
         to_addr: String,
@@ -1142,53 +1157,73 @@ mod batch_processor {
         socket_path: Option<String>,
         rx: Receiver<Message>,
     ) {
-        let mut last_updated = SystemTime::now();
         let mut buffer: Vec<u8> = vec![];
+        let mut batch_started_at: Option<Instant> = None;
 
         loop {
-            match rx.recv() {
+            let message = match batch_started_at {
+                Some(started_at) => match rx
+                    .recv_timeout(remaining_batch_time(started_at, batching_options.max_time))
+                {
+                    Ok(message) => Ok(message),
+                    Err(RecvTimeoutError::Timeout) => {
+                        flush_buffer(
+                            &batching_options,
+                            &socket,
+                            &mut buffer,
+                            &to_addr,
+                            &socket_path,
+                        );
+                        batch_started_at = None;
+                        continue;
+                    }
+                    Err(RecvTimeoutError::Disconnected) => Err(RecvTimeoutError::Disconnected),
+                },
+                None => rx.recv().map_err(|_| RecvTimeoutError::Disconnected),
+            };
+
+            match message {
                 Ok(Message::Data(data)) => {
                     let next_buffer_size = buffer.len() + data.len() + 1;
 
                     if !buffer.is_empty() && next_buffer_size > batching_options.max_buffer_size {
-                        send_to_socket_with_retries(
+                        flush_buffer(
                             &batching_options,
                             &socket,
-                            &buffer,
+                            &mut buffer,
                             &to_addr,
                             &socket_path,
                         );
-                        buffer.clear();
-                        last_updated = SystemTime::now();
+                        batch_started_at = None;
+                    }
+
+                    if buffer.is_empty() {
+                        batch_started_at = Some(Instant::now());
                     }
 
                     buffer.extend(data);
                     buffer.push(b'\n');
 
-                    let current_time = SystemTime::now();
-                    if buffer.len() >= batching_options.max_buffer_size
-                        || last_updated + batching_options.max_time < current_time
-                    {
-                        send_to_socket_with_retries(
+                    if buffer.len() >= batching_options.max_buffer_size {
+                        flush_buffer(
                             &batching_options,
                             &socket,
-                            &buffer,
+                            &mut buffer,
                             &to_addr,
                             &socket_path,
                         );
-                        buffer.clear();
-                        last_updated = current_time;
+                        batch_started_at = None;
                     }
                 }
                 Ok(Message::Shutdown) => {
-                    send_to_socket_with_retries(
+                    flush_buffer(
                         &batching_options,
                         &socket,
-                        &buffer,
+                        &mut buffer,
                         &to_addr,
                         &socket_path,
                     );
-                    buffer.clear();
+                    break;
                 }
                 Err(e) => {
                     println!("Exception occurred when reading from channel: {:?}", e);
@@ -1196,6 +1231,12 @@ mod batch_processor {
                 }
             }
         }
+    }
+
+    fn remaining_batch_time(started_at: Instant, max_time: Duration) -> Duration {
+        max_time
+            .checked_sub(started_at.elapsed())
+            .unwrap_or(Duration::ZERO)
     }
 }
 
